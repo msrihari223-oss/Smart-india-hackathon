@@ -209,51 +209,79 @@ class App {
     }
 
     // ================= Post Creator with Photo/Video Media =================
+    const tabBtnPhoto = document.getElementById('tab-btn-photo');
+    const tabBtnVideo = document.getElementById('tab-btn-video');
     const mediaTypeSelect = document.getElementById('creator-media-type');
-    const mediaUrlWrap = document.getElementById('creator-media-url-wrap');
+    const mediaModeLabel = document.getElementById('media-mode-label');
     const mediaUrlInput = document.getElementById('creator-media-url');
     const mediaPreview = document.getElementById('creator-media-preview');
-    const mediaStatusPill = document.getElementById('creator-media-status-pill');
     const btnTriggerUpload = document.getElementById('btn-trigger-upload');
     const fileInput = document.getElementById('creator-file-input');
     const btnSamplePhoto = document.getElementById('btn-sample-photo');
     const btnSampleVideo = document.getElementById('btn-sample-video');
-    const btnSampleClear = document.getElementById('btn-sample-clear');
     const btnBroadcast = document.getElementById('btn-broadcast-post');
+    const btnPostCancel = document.getElementById('btn-post-cancel');
+    const btnCancelX = document.getElementById('btn-cancel-post-x');
+    const btnQuickCreatePost = document.getElementById('btn-quick-create-post');
 
     const updateMediaPreview = () => {
       if (!mediaPreview || !mediaUrlInput) return;
       const url = mediaUrlInput.value.trim();
-      const currentType = mediaTypeSelect ? mediaTypeSelect.value : 'none';
+      const currentType = mediaTypeSelect ? mediaTypeSelect.value : 'photo';
 
-      if (currentType === 'none' || !url) {
-        mediaPreview.innerHTML = '<div style="color: var(--text-dim); font-size: 0.85rem; padding: 2rem; text-align: center;"><i class="fas fa-file-lines" style="font-size: 1.6rem; margin-bottom: 0.5rem; display: block;"></i>Text-Only Post Mode (No Media Attached)</div>';
-        if (mediaStatusPill) {
-          mediaStatusPill.className = 'kpi-badge badge-purple';
-          mediaStatusPill.innerText = 'Text Only';
-        }
+      if (!url) {
+        mediaPreview.innerHTML = '<div style="color: var(--text-dim); font-size: 0.85rem; padding: 2rem; text-align: center;"><i class="fas fa-cloud-arrow-up" style="font-size: 1.6rem; margin-bottom: 0.5rem; display: block; color: var(--text-muted);"></i>Upload a file or paste URL above to preview media</div>';
         return;
       }
 
-      const isVideo = currentType === 'video' || url.endsWith('.mp4') || url.endsWith('.webm') || url.startsWith('data:video');
-      
-      if (isVideo) {
-        if (mediaTypeSelect) mediaTypeSelect.value = 'video';
-        if (mediaStatusPill) {
-          mediaStatusPill.className = 'kpi-badge badge-purple';
-          mediaStatusPill.innerHTML = '<i class="fas fa-video"></i> Video Stream Ready';
-        }
-        mediaPreview.innerHTML = `<video src="${url}" controls autoplay muted playsinline style="width: 100%; max-height: 280px; border-radius: 8px; object-fit: contain; background: #000;"></video>`;
+      if (currentType === 'video' || url.endsWith('.mp4') || url.endsWith('.webm') || url.startsWith('data:video')) {
+        mediaPreview.innerHTML = `<video src="${url}" controls autoplay muted playsinline style="width: 100%; max-height: 260px; border-radius: 8px; object-fit: contain; background: #000; display: block;"></video>`;
       } else {
-        if (mediaTypeSelect) mediaTypeSelect.value = 'photo';
-        if (mediaStatusPill) {
-          mediaStatusPill.className = 'kpi-badge badge-cyan';
-          mediaStatusPill.innerHTML = '<i class="fas fa-image"></i> Photo Ready';
-        }
-        mediaPreview.innerHTML = `<img src="${url}" alt="Preview" style="width: 100%; max-height: 280px; border-radius: 8px; object-fit: cover;" onerror="this.parentElement.innerHTML='<div style=\\'color:#f43f5e; font-size:0.8rem; padding:1.5rem;\\'>Invalid image URL</div>'"/>`;
+        mediaPreview.innerHTML = `<img src="${url}" alt="Preview" style="width: 100%; max-height: 260px; border-radius: 8px; object-fit: cover; display: block;" onerror="this.parentElement.innerHTML='<div style=\\'color:#f43f5e; font-size:0.8rem; padding:1.5rem;\\'>Invalid image URL</div>'"/>`;
       }
     };
 
+    // Photo Tab Switch
+    if (tabBtnPhoto) {
+      tabBtnPhoto.addEventListener('click', () => {
+        if (tabBtnVideo) tabBtnVideo.classList.remove('active');
+        tabBtnPhoto.classList.add('active');
+        if (mediaTypeSelect) mediaTypeSelect.value = 'photo';
+        if (mediaModeLabel) {
+          mediaModeLabel.style.color = 'var(--neon-cyan)';
+          mediaModeLabel.innerHTML = '<i class="fas fa-image"></i> Photo Attachment';
+        }
+        if (mediaUrlInput) {
+          mediaUrlInput.placeholder = 'Paste image URL (e.g. https://... .jpg, .png)';
+          if (!mediaUrlInput.value || mediaUrlInput.value.includes('.mp4')) {
+            mediaUrlInput.value = 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=800&q=80';
+          }
+        }
+        updateMediaPreview();
+      });
+    }
+
+    // Video Tab Switch
+    if (tabBtnVideo) {
+      tabBtnVideo.addEventListener('click', () => {
+        if (tabBtnPhoto) tabBtnPhoto.classList.remove('active');
+        tabBtnVideo.classList.add('active');
+        if (mediaTypeSelect) mediaTypeSelect.value = 'video';
+        if (mediaModeLabel) {
+          mediaModeLabel.style.color = '#c084fc';
+          mediaModeLabel.innerHTML = '<i class="fas fa-film"></i> Video Stream Attachment';
+        }
+        if (mediaUrlInput) {
+          mediaUrlInput.placeholder = 'Paste video URL (e.g. https://... .mp4, .webm)';
+          if (!mediaUrlInput.value || mediaUrlInput.value.includes('images.unsplash.com')) {
+            mediaUrlInput.value = 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4';
+          }
+        }
+        updateMediaPreview();
+      });
+    }
+
+    // Trigger File Upload
     if (btnTriggerUpload && fileInput) {
       btnTriggerUpload.addEventListener('click', () => fileInput.click());
       fileInput.addEventListener('change', (e) => {
@@ -265,27 +293,13 @@ class App {
           const dataUrl = event.target.result;
           if (mediaUrlInput) mediaUrlInput.value = dataUrl;
           if (file.type.startsWith('video')) {
-            if (mediaTypeSelect) mediaTypeSelect.value = 'video';
+            if (tabBtnVideo) tabBtnVideo.click();
           } else {
-            if (mediaTypeSelect) mediaTypeSelect.value = 'photo';
+            if (tabBtnPhoto) tabBtnPhoto.click();
           }
-          if (mediaUrlWrap) mediaUrlWrap.style.display = 'block';
           updateMediaPreview();
         };
         reader.readAsDataURL(file);
-      });
-    }
-
-    if (mediaTypeSelect) {
-      mediaTypeSelect.addEventListener('change', (e) => {
-        const val = e.target.value;
-        if (val === 'photo' || val === 'video') {
-          if (mediaUrlWrap) mediaUrlWrap.style.display = 'block';
-          updateMediaPreview();
-        } else {
-          if (mediaUrlInput) mediaUrlInput.value = '';
-          updateMediaPreview();
-        }
       });
     }
 
@@ -297,8 +311,7 @@ class App {
 
     if (btnSamplePhoto) {
       btnSamplePhoto.addEventListener('click', () => {
-        if (mediaTypeSelect) mediaTypeSelect.value = 'photo';
-        if (mediaUrlWrap) mediaUrlWrap.style.display = 'block';
+        if (tabBtnPhoto) tabBtnPhoto.click();
         if (mediaUrlInput) {
           mediaUrlInput.value = 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=800&q=80';
           updateMediaPreview();
@@ -308,8 +321,7 @@ class App {
 
     if (btnSampleVideo) {
       btnSampleVideo.addEventListener('click', () => {
-        if (mediaTypeSelect) mediaTypeSelect.value = 'video';
-        if (mediaUrlWrap) mediaUrlWrap.style.display = 'block';
+        if (tabBtnVideo) tabBtnVideo.click();
         if (mediaUrlInput) {
           mediaUrlInput.value = 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4';
           updateMediaPreview();
@@ -317,11 +329,19 @@ class App {
       });
     }
 
-    if (btnSampleClear) {
-      btnSampleClear.addEventListener('click', () => {
-        if (mediaTypeSelect) mediaTypeSelect.value = 'none';
-        if (mediaUrlInput) mediaUrlInput.value = '';
-        updateMediaPreview();
+    // Cancel / Close Handlers
+    const returnToFeed = () => {
+      const feedTab = document.querySelector('.nav-tab[data-target="view-feed"]');
+      if (feedTab) feedTab.click();
+    };
+
+    if (btnPostCancel) btnPostCancel.addEventListener('click', returnToFeed);
+    if (btnCancelX) btnCancelX.addEventListener('click', returnToFeed);
+
+    if (btnQuickCreatePost) {
+      btnQuickCreatePost.addEventListener('click', () => {
+        const studioTab = document.querySelector('.nav-tab[data-target="view-media-broadcast"]');
+        if (studioTab) studioTab.click();
       });
     }
 
@@ -339,26 +359,23 @@ class App {
       btnBroadcast.addEventListener('click', async () => {
         const text = (document.getElementById('creator-post-text')?.value || '').trim();
         const platform = document.getElementById('creator-platform')?.value || 'X';
-        let mediaType = mediaTypeSelect ? mediaTypeSelect.value : 'none';
+        let mediaType = mediaTypeSelect ? mediaTypeSelect.value : 'photo';
         let mediaUrl = mediaUrlInput ? mediaUrlInput.value.trim() : null;
 
         if (!text && !mediaUrl) {
-          return alert('Please enter post text or attach a media link/photo/video.');
+          return alert('Please write a caption or attach a photo/video.');
         }
 
-        if (mediaUrl && mediaType !== 'none') {
+        if (mediaUrl) {
           if (mediaType === 'video' || mediaUrl.endsWith('.mp4') || mediaUrl.endsWith('.webm') || mediaUrl.startsWith('data:video')) {
             mediaType = 'video';
           } else {
             mediaType = 'photo';
           }
-        } else {
-          mediaType = 'none';
-          mediaUrl = null;
         }
 
         btnBroadcast.disabled = true;
-        btnBroadcast.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Broadcasting to Stream...';
+        btnBroadcast.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Posting...';
 
         // Retrieve logged in user info if available
         let authorUsername = 'operator';
@@ -387,20 +404,19 @@ class App {
 
           if (res.success && res.post) {
             this.prependPostCard(res.post);
-            btnBroadcast.innerHTML = '<i class="fas fa-check-circle" style="color: #10b981;"></i> Broadcast Published!';
+            btnBroadcast.innerHTML = '<i class="fas fa-check-circle" style="color: #10b981;"></i> Posted!';
             
             // Auto-switch to Live Feed tab so user immediately sees their photo/video post!
             setTimeout(() => {
-              const feedTab = document.querySelector('.nav-tab[data-target="view-feed"]');
-              if (feedTab) feedTab.click();
+              returnToFeed();
               btnBroadcast.disabled = false;
-              btnBroadcast.innerHTML = '<i class="fas fa-satellite-dish"></i> Publish & Broadcast Post to Ingestion Stream';
-            }, 600);
+              btnBroadcast.innerHTML = '<i class="fas fa-paper-plane"></i> Post';
+            }, 500);
           }
         } catch (err) {
-          alert('Error broadcasting post: ' + err.message);
+          alert('Error creating post: ' + err.message);
           btnBroadcast.disabled = false;
-          btnBroadcast.innerHTML = '<i class="fas fa-satellite-dish"></i> Publish & Broadcast Post to Ingestion Stream';
+          btnBroadcast.innerHTML = '<i class="fas fa-paper-plane"></i> Post';
         }
       });
     }

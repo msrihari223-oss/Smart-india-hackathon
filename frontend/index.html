@@ -132,13 +132,18 @@
     <div class="grid-feed-layout">
       <!-- Live Feed Column -->
       <div class="glass-card">
-        <div class="card-header">
-          <div class="card-title">
-            <i class="fas fa-stream"></i> Multi-Platform Ingestion Stream
+        <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <div class="card-title">
+              <i class="fas fa-stream"></i> Multi-Platform Ingestion Stream
+            </div>
+            <div style="font-size: 0.75rem; color: var(--text-muted);">
+              Auto-analyzing incoming posts
+            </div>
           </div>
-          <div style="font-size: 0.75rem; color: var(--text-muted);">
-            Auto-analyzing incoming posts
-          </div>
+          <button id="btn-quick-create-post" class="btn-post-submit-gradient" style="padding: 0.4rem 0.95rem; font-size: 0.8rem;">
+            <i class="fas fa-plus"></i> Create Post
+          </button>
         </div>
 
         <!-- Platform Filters -->
@@ -182,154 +187,93 @@
   </main>
 
   <!-- ==================== View 2: Media & Post Broadcast Studio ==================== -->
+  <!-- ==================== View 2: Media & Post Broadcast Studio ==================== -->
   <section id="view-media-broadcast" class="view-section">
-    <div class="grid-feed-layout">
-      <!-- Left Column: Media Post Broadcast Composer -->
-      <div class="glass-card">
-        <div class="card-header">
-          <div class="card-title">
-            <i class="fas fa-photo-film" style="color: var(--neon-cyan);"></i> Media & Post Broadcast Studio
-          </div>
-          <div class="kpi-badge badge-cyan">
-            <i class="fas fa-satellite-dish"></i> Live Stream Injection
-          </div>
-        </div>
-
-        <div style="padding: 0.5rem 0;">
-          <!-- Text Composer -->
-          <div class="form-group" style="margin-bottom: 1rem;">
-            <label class="input-label" style="display: flex; justify-content: space-between;">
-              <span>Post Content & Commentary</span>
-              <span id="creator-char-counter" style="color: var(--text-dim); font-family: var(--font-mono);">0 / 500</span>
-            </label>
-            <textarea id="creator-post-text" class="custom-textarea" placeholder="Write an intelligence update, breaking news dispatch, or audience analysis..." style="height: 110px;"></textarea>
-          </div>
-
-          <!-- Configuration Grid -->
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
-            <div class="form-group">
-              <label class="input-label"><i class="fas fa-globe"></i> Destination Platform</label>
-              <select id="creator-platform" class="custom-input">
-                <option value="X">X (Twitter)</option>
-                <option value="Instagram">Instagram</option>
-                <option value="YouTube">YouTube</option>
-                <option value="Telegram">Telegram</option>
-                <option value="Reddit">Reddit</option>
-                <option value="Facebook">Facebook</option>
-                <option value="Bluesky">Bluesky</option>
-              </select>
-            </div>
-
-            <div class="form-group">
-              <label class="input-label"><i class="fas fa-paperclip"></i> Media Attachment Mode</label>
-              <select id="creator-media-type" class="custom-input">
-                <option value="none">No Media (Text Only)</option>
-                <option value="photo" selected>Photo / High-Res Image</option>
-                <option value="video">Video (MP4 / WebM / Stream)</option>
-              </select>
-            </div>
-          </div>
-
-          <!-- Media Link & File Upload & Presets -->
-          <div id="creator-media-url-wrap" style="margin-bottom: 1rem;">
-            <label class="input-label" style="display: flex; justify-content: space-between; align-items: center;">
-              <span><i class="fas fa-link"></i> Photo or Video Media URL / Upload File</span>
-              <button type="button" id="btn-trigger-upload" class="btn-icon" style="font-size: 0.72rem; padding: 0.2rem 0.55rem; color: var(--neon-emerald); border-color: rgba(16, 185, 129, 0.4);">
-                <i class="fas fa-cloud-arrow-up"></i> Upload From Device
-              </button>
-            </label>
-            <input type="file" id="creator-file-input" accept="image/*,video/*" style="display: none;" />
-            <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
-              <input id="creator-media-url" class="custom-input" placeholder="Paste image or video URL (e.g. https://... .jpg, .png, .mp4)" value="https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=800&q=80" />
-            </div>
-            
-            <div style="display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center;">
-              <span style="font-size: 0.72rem; color: var(--text-muted); font-family: var(--font-mono);">Quick Presets:</span>
-              <button type="button" id="btn-sample-photo" class="btn-icon" style="font-size: 0.74rem; padding: 0.3rem 0.65rem;">
-                <i class="fas fa-image" style="color: var(--neon-cyan);"></i> AI Tech Photo
-              </button>
-              <button type="button" id="btn-sample-video" class="btn-icon" style="font-size: 0.74rem; padding: 0.3rem 0.65rem;">
-                <i class="fas fa-film" style="color: var(--neon-purple);"></i> Sample Video (MP4)
-              </button>
-              <button type="button" id="btn-sample-clear" class="btn-icon" style="font-size: 0.74rem; padding: 0.3rem 0.65rem; color: var(--text-dim);">
-                <i class="fas fa-ban"></i> Clear Media (Text Only)
-              </button>
-            </div>
-          </div>
-
-          <!-- Live Broadcast Preview Player -->
-          <div class="form-group" style="margin-bottom: 1.25rem;">
-            <label class="input-label" style="display: flex; justify-content: space-between;">
-              <span><i class="fas fa-eye"></i> Live Interactive Media Player</span>
-              <span id="creator-media-status-pill" class="kpi-badge badge-cyan" style="font-size: 0.68rem; padding: 0.15rem 0.5rem;">Photo Attached</span>
-            </label>
-            <div id="creator-media-preview" style="background: rgba(0, 0, 0, 0.6); border: 1px solid var(--border-glow); border-radius: 12px; min-height: 180px; max-height: 280px; display: flex; align-items: center; justify-content: center; overflow: hidden;">
-              <img src="https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=800&q=80" alt="Preview" style="width: 100%; max-height: 280px; object-fit: cover;" />
-            </div>
-          </div>
-
-          <!-- Broadcast Action Button -->
-          <button id="btn-broadcast-post" class="btn-primary" style="width: 100%; padding: 0.85rem; font-size: 0.95rem;">
-            <i class="fas fa-satellite-dish"></i> Publish & Broadcast Post to Ingestion Stream
+    <div style="display: flex; justify-content: center; align-items: flex-start; padding: 1.5rem 0;">
+      <div class="create-post-container">
+        <!-- Header -->
+        <div class="create-post-header">
+          <div class="create-post-title">Create Post</div>
+          <button type="button" class="create-post-close-btn" id="btn-cancel-post-x" title="Cancel / Switch to Feed">
+            <i class="fas fa-times"></i>
           </button>
         </div>
-      </div>
 
-      <!-- Right Column: Broadcast Intelligence & Real-Time Published Stream -->
-      <div style="display: flex; flex-direction: column; gap: 1.25rem;">
-        <div class="glass-card">
-          <div class="card-header">
-            <div class="card-title"><i class="fas fa-layer-group"></i> Broadcast Media Guidelines</div>
+        <!-- Segmented Photo / Video Switcher Tabs -->
+        <div class="create-post-tabs">
+          <button type="button" class="media-tab-btn tab-photo active" id="tab-btn-photo">
+            <i class="fas fa-camera"></i> Photo
+          </button>
+          <button type="button" class="media-tab-btn tab-video" id="tab-btn-video">
+            <i class="fas fa-film"></i> Video
+          </button>
+        </div>
+
+        <!-- Caption Textarea -->
+        <div style="margin-bottom: 1rem;">
+          <textarea id="creator-post-text" class="create-post-textarea" placeholder="Write a caption (optional)..."></textarea>
+        </div>
+
+        <!-- Media Attachment & Live Player Box -->
+        <div style="background: rgba(0, 0, 0, 0.35); border: 1px solid var(--border-subtle); border-radius: 12px; padding: 0.85rem; margin-bottom: 1rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem;">
+            <span id="media-mode-label" style="font-size: 0.8rem; font-weight: 600; color: var(--neon-cyan);">
+              <i class="fas fa-image"></i> Photo Attachment
+            </span>
+            <div style="display: flex; gap: 0.4rem;">
+              <button type="button" id="btn-trigger-upload" class="btn-icon" style="font-size: 0.72rem; padding: 0.25rem 0.6rem; color: var(--neon-emerald); border-color: rgba(16, 185, 129, 0.4);">
+                <i class="fas fa-cloud-arrow-up"></i> Upload From Device
+              </button>
+              <input type="file" id="creator-file-input" accept="image/*,video/*" style="display: none;" />
+            </div>
           </div>
-          <div style="font-size: 0.82rem; color: var(--text-secondary); line-height: 1.6; display: flex; flex-direction: column; gap: 0.75rem;">
-            <div style="display: flex; gap: 0.65rem; align-items: flex-start;">
-              <i class="fas fa-check-circle" style="color: var(--neon-emerald); margin-top: 3px;"></i>
-              <div><b>Instant AI Processing:</b> Posts are instantly enriched with Sentiment, Emotions, Sarcasm detection, and Demographic inference.</div>
-            </div>
-            <div style="display: flex; gap: 0.65rem; align-items: flex-start;">
-              <i class="fas fa-comments" style="color: var(--neon-cyan); margin-top: 3px;"></i>
-              <div><b>Interactive Comments & Feedback:</b> Published posts immediately support audience comments with automated anti-toxicity guardrails.</div>
-            </div>
-            <div style="display: flex; gap: 0.65rem; align-items: flex-start;">
-              <i class="fas fa-database" style="color: var(--primary-light); margin-top: 3px;"></i>
-              <div><b>Database Persistence:</b> Records are persisted into PostgreSQL (or memory fallback) and streamed across connected sessions.</div>
-            </div>
+
+          <div style="display: flex; gap: 0.5rem; margin-bottom: 0.6rem;">
+            <input id="creator-media-url" class="custom-input" placeholder="Paste image URL (e.g. https://... .jpg, .png)" value="https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=800&q=80" style="font-size: 0.82rem;" />
+          </div>
+
+          <!-- Quick Sample Presets -->
+          <div style="display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; margin-bottom: 0.75rem;">
+            <span style="font-size: 0.7rem; color: var(--text-muted); font-family: var(--font-mono);">Quick Presets:</span>
+            <button type="button" id="btn-sample-photo" class="btn-icon" style="font-size: 0.72rem; padding: 0.2rem 0.55rem; color: var(--neon-cyan);">
+              <i class="fas fa-image"></i> Sample AI Photo
+            </button>
+            <button type="button" id="btn-sample-video" class="btn-icon" style="font-size: 0.72rem; padding: 0.2rem 0.55rem; color: var(--neon-purple);">
+              <i class="fas fa-film"></i> Sample 4K Video
+            </button>
+          </div>
+
+          <!-- Live Interactive Media Player -->
+          <div id="creator-media-preview" style="background: rgba(0, 0, 0, 0.6); border: 1px solid var(--border-glow); border-radius: 10px; min-height: 180px; max-height: 260px; display: flex; align-items: center; justify-content: center; overflow: hidden;">
+            <img src="https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=800&q=80" alt="Preview" style="width: 100%; max-height: 260px; object-fit: cover;" />
           </div>
         </div>
 
-        <div class="glass-card">
-          <div class="card-header">
-            <div class="card-title"><i class="fas fa-bolt"></i> Fast Sample Inspiration</div>
+        <!-- Platform & Character Counter -->
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; font-size: 0.8rem;">
+          <div style="display: flex; align-items: center; gap: 0.5rem; color: var(--text-muted);">
+            <i class="fas fa-globe"></i>
+            <span>Platform:</span>
+            <select id="creator-platform" class="custom-input" style="padding: 0.25rem 0.6rem; font-size: 0.78rem; width: auto; min-width: 120px;">
+              <option value="X">X (Twitter)</option>
+              <option value="Instagram">Instagram</option>
+              <option value="YouTube">YouTube</option>
+              <option value="Reddit">Reddit</option>
+              <option value="Telegram">Telegram</option>
+            </select>
           </div>
-          <div style="display: flex; flex-direction: column; gap: 0.5rem;">
-            <button class="btn-icon" style="text-align: left; padding: 0.6rem 0.85rem; font-size: 0.78rem;" onclick="
-              document.getElementById('creator-post-text').value='Breaking: Next-generation Neural AI models achieve record reasoning benchmarks across multi-modal datasets #AI #TechTrends';
-              document.getElementById('creator-media-type').value='photo';
-              document.getElementById('creator-media-url').value='https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=800&q=80';
-              document.getElementById('creator-media-url').dispatchEvent(new Event('input'));
-              document.getElementById('creator-post-text').dispatchEvent(new Event('input'));
-            ">
-              <i class="fas fa-image" style="color: var(--neon-cyan);"></i> <b>[Photo Post]</b> "Next-gen Neural AI models achieve record benchmarks..."
-            </button>
-            <button class="btn-icon" style="text-align: left; padding: 0.6rem 0.85rem; font-size: 0.78rem;" onclick="
-              document.getElementById('creator-post-text').value='Check out this stunning 4K drone cinematography capture over the cyber metropolis skyline! #Video #VisualArt';
-              document.getElementById('creator-media-type').value='video';
-              document.getElementById('creator-media-url').value='https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4';
-              document.getElementById('creator-media-url').dispatchEvent(new Event('input'));
-              document.getElementById('creator-post-text').dispatchEvent(new Event('input'));
-            ">
-              <i class="fas fa-video" style="color: var(--neon-purple);"></i> <b>[Video Post]</b> "Check out this stunning 4K drone cinematography capture..."
-            </button>
-            <button class="btn-icon" style="text-align: left; padding: 0.6rem 0.85rem; font-size: 0.78rem;" onclick="
-              document.getElementById('creator-post-text').value='Global markets rally as tech and quantum computing sectors announce breakthrough partnerships! #Finance #Crypto';
-              document.getElementById('creator-media-type').value='photo';
-              document.getElementById('creator-media-url').value='https://images.unsplash.com/photo-1642543492481-44e81e3914a7?auto=format&fit=crop&w=800&q=80';
-              document.getElementById('creator-media-url').dispatchEvent(new Event('input'));
-              document.getElementById('creator-post-text').dispatchEvent(new Event('input'));
-            ">
-              <i class="fas fa-chart-line" style="color: var(--neon-emerald);"></i> <b>[Market Photo]</b> "Global markets rally as tech sectors announce..."
-            </button>
-          </div>
+          <span id="creator-char-counter" style="color: var(--text-dim); font-family: var(--font-mono); font-size: 0.75rem;">0 / 500</span>
+        </div>
+
+        <!-- Hidden input for media type tracking -->
+        <input type="hidden" id="creator-media-type" value="photo" />
+
+        <!-- Bottom Action Bar -->
+        <div class="create-post-footer">
+          <button type="button" id="btn-post-cancel" class="btn-post-cancel">Cancel</button>
+          <button type="button" id="btn-broadcast-post" class="btn-post-submit-gradient">
+            <i class="fas fa-paper-plane"></i> Post
+          </button>
         </div>
       </div>
     </div>
