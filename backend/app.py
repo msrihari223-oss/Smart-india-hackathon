@@ -469,7 +469,7 @@ async def trigger_real_collection():
     }
 
 @app.get("/api/real-users/export")
-async def export_real_users(format: str = Query("json", regex="^(json|csv)$")):
+async def export_real_users(format: str = Query("json", pattern="^(json|csv)$")):
     """Export all collected real user data in JSON or CSV format for download"""
     users = real_user_manager.get_all_users(limit=1000)
     
