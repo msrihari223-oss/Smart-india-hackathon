@@ -800,19 +800,100 @@ class App {
       </div>
       <div class="post-footer">
         <div class="post-metrics">
-          <button class="post-metric-btn" onclick="this.classList.toggle('active')"><i class="far fa-heart"></i> ${post.engagement?.likes || 1}</button>
-          <button class="post-metric-btn"><i class="fas fa-retweet"></i> ${post.engagement?.shares || 0}</button>
+          <button class="post-metric-btn like-btn btn-like-action" style="cursor: pointer;">
+            <i class="far fa-heart"></i> <span class="like-counter">${post.engagement?.likes || 1}</span>
+          </button>
+          <button class="post-metric-btn repost-btn btn-repost-action" style="cursor: pointer;">
+            <i class="fas fa-retweet"></i> <span class="repost-counter">${post.engagement?.shares || 0}</span>
+          </button>
           <button class="post-metric-btn btn-comments-action" style="cursor: pointer; background: rgba(99, 102, 241, 0.15); border-color: rgba(99, 102, 241, 0.4); color: var(--primary-light);">
             <i class="far fa-comment-dots"></i> Comments (<span id="post-cmt-count-${post.id}">${post.comments_count || 0}</span>)
           </button>
         </div>
         <div>
-          ${post.target_user ? `<span style="color: var(--neon-purple); font-size: 0.72rem;">⮑ ${post.interaction_type} @${post.target_user}</span>` : ''}
+          ${post.target_user ? `<span style="color: var(--neon-purple); font-size: 0.72rem; font-weight: 600;"><i class="fas fa-retweet"></i> ${post.interaction_type || 'REPOST'} @${post.target_user}</span>` : ''}
         </div>
       </div>
     `;
 
-    // Bind comments trigger
+    // 1. Bind Like Trigger
+    const likeBtn = card.querySelector('.btn-like-action');
+    const likeCounter = card.querySelector('.like-counter');
+    let isLiked = false;
+    if (likeBtn && likeCounter) {
+      likeBtn.addEventListener('click', async () => {
+        isLiked = !isLiked;
+        let count = parseInt(likeCounter.innerText || '1', 10);
+        count = isLiked ? count + 1 : Math.max(0, count - 1);
+        likeCounter.innerText = count;
+
+        if (isLiked) {
+          likeBtn.classList.add('active');
+          likeBtn.querySelector('i').className = 'fas fa-heart';
+        } else {
+          likeBtn.classList.remove('active');
+          likeBtn.querySelector('i').className = 'far fa-heart';
+        }
+
+        const username = window.authController?.user?.username || 'operator';
+        try {
+          await ApiClient.likePost(post.id, isLiked, username);
+        } catch (e) {
+          console.error('Like sync error:', e);
+        }
+      });
+    }
+
+    // 2. Bind Repost Trigger
+    const repostBtn = card.querySelector('.btn-repost-action');
+    const repostCounter = card.querySelector('.repost-counter');
+    let hasReposted = false;
+    if (repostBtn && repostCounter) {
+      repostBtn.addEventListener('click', async () => {
+        if (hasReposted) {
+          return alert('You have already reposted this intelligence dispatch!');
+        }
+
+        const confirmRepost = confirm(`🔄 Repost dispatch from @${author.username} to Live Stream Feed?`);
+        if (!confirmRepost) return;
+
+        repostBtn.disabled = true;
+        repostBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Reposting...';
+
+        const u = window.authController?.user || {};
+        const authorUsername = u.username || 'operator';
+        const authorName = u.full_name || 'Operator';
+        const authorAvatar = u.avatar || null;
+        const authorRole = u.role || 'Analyst';
+
+        try {
+          const res = await ApiClient.repostPost(post.id, {
+            author_username: authorUsername,
+            author_name: authorName,
+            author_avatar: authorAvatar,
+            author_role: authorRole
+          });
+
+          if (res.success) {
+            hasReposted = true;
+            let currentShares = parseInt(repostCounter.innerText || '0', 10);
+            repostCounter.innerText = currentShares + 1;
+            repostBtn.classList.add('active');
+            repostBtn.innerHTML = `<i class="fas fa-retweet"></i> <span class="repost-counter">${currentShares + 1}</span>`;
+            
+            if (res.repost) {
+              this.prependPostCard(res.repost);
+            }
+          }
+        } catch (err) {
+          alert('Error reposting: ' + err.message);
+          repostBtn.disabled = false;
+          repostBtn.innerHTML = `<i class="fas fa-retweet"></i> <span class="repost-counter">${repostCounter.innerText}</span>`;
+        }
+      });
+    }
+
+    // 3. Bind Comments Trigger
     const commentBtn = card.querySelector('.btn-comments-action');
     if (commentBtn) {
       commentBtn.addEventListener('click', () => this.openCommentsModal(post));

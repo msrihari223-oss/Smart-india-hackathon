@@ -169,3 +169,21 @@ class AppUserRecord(Base):
     created_at = Column(Float, nullable=False)
     last_login = Column(Float, nullable=False)
 
+
+class PostLikeRecord(Base):
+    """
+    Persisted Post Likes mapping User interactions to Posts in PostgreSQL.
+    """
+    __tablename__ = "post_likes"
+
+    id = Column(String(128), primary_key=True, index=True)
+    post_id = Column(String(64), index=True, nullable=False)
+    username = Column(String(64), index=True, nullable=False)
+    created_at_epoch = Column(Float, nullable=False)
+    created_at_iso = Column(String(32))
+
+    __table_args__ = (
+        Index("ix_post_likes_post_user", "post_id", "username"),
+    )
+
+

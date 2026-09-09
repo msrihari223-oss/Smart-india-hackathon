@@ -153,3 +153,17 @@ CREATE TABLE IF NOT EXISTS app_users (
 CREATE INDEX IF NOT EXISTS ix_app_user_username ON app_users(username);
 CREATE INDEX IF NOT EXISTS ix_app_user_email ON app_users(email);
 
+-- Post Likes Table (Automatic User Likes Persistence)
+CREATE TABLE IF NOT EXISTS post_likes (
+    id VARCHAR(128) PRIMARY KEY,
+    post_id VARCHAR(64) NOT NULL,
+    username VARCHAR(64) NOT NULL,
+    created_at_epoch DOUBLE PRECISION NOT NULL,
+    created_at_iso VARCHAR(32)
+);
+
+CREATE INDEX IF NOT EXISTS ix_post_likes_post_id ON post_likes(post_id);
+CREATE INDEX IF NOT EXISTS ix_post_likes_user ON post_likes(username);
+CREATE INDEX IF NOT EXISTS ix_post_likes_post_user ON post_likes(post_id, username);
+
+

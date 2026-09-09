@@ -1519,6 +1519,39 @@ header {
   background: rgba(244, 63, 94, 0.12);
 }
 
+.post-metric-btn.like-btn.active {
+  color: #f43f5e;
+  border-color: rgba(244, 63, 94, 0.5);
+  background: rgba(244, 63, 94, 0.18);
+  box-shadow: 0 0 10px rgba(244, 63, 94, 0.35);
+}
+
+.post-metric-btn.like-btn.active i {
+  animation: heartPop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.post-metric-btn.repost-btn.active {
+  color: #10b981;
+  border-color: rgba(16, 185, 129, 0.5);
+  background: rgba(16, 185, 129, 0.18);
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.35);
+}
+
+.post-metric-btn.repost-btn.active i {
+  animation: rotateRepost 0.4s ease;
+}
+
+@keyframes heartPop {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.4); }
+  100% { transform: scale(1); }
+}
+
+@keyframes rotateRepost {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(180deg); }
+}
+
 .post-media-container {
   position: relative;
   transition: transform 0.2s ease;

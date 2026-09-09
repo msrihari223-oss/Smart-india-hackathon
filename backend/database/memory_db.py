@@ -167,6 +167,39 @@ class TimelineDatabase:
             "velocity_per_minute": max(recent_posts * 6, 24)
         }
 
+    def toggle_like(self, post_id: str, liked: bool, username: str = "operator") -> int:
+        """Increments or decrements likes on in-memory post and syncs to PostgreSQL"""
+        likes_count = 1
+        for p in self.records:
+            if p.get("id") == post_id:
+                eng = p.setdefault("engagement", {})
+                cur = eng.get("likes", 0)
+                eng["likes"] = max(0, cur + (1 if liked else -1))
+                likes_count = eng["likes"]
+                break
+        try:
+            if postgres_repo.is_connected:
+                postgres_repo.toggle_like(post_id, liked, username)
+        except Exception:
+            pass
+        return likes_count
+
+    def increment_share(self, post_id: str) -> int:
+        """Increments repost / share counter on in-memory post and syncs to PostgreSQL"""
+        shares_count = 1
+        for p in self.records:
+            if p.get("id") == post_id:
+                eng = p.setdefault("engagement", {})
+                eng["shares"] = eng.get("shares", 0) + 1
+                shares_count = eng["shares"]
+                break
+        try:
+            if postgres_repo.is_connected:
+                postgres_repo.increment_share(post_id)
+        except Exception:
+            pass
+        return shares_count
+
     def add_comment(self, post_id: str, comment_dict: Dict[str, Any]) -> Dict[str, Any]:
         """Stores a comment on a specific post and increments reply counter"""
         if not hasattr(self, 'comments_store'):

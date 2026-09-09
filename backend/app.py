@@ -174,6 +174,17 @@ class CreateCommentRequest(BaseModel):
     author_role: Optional[str] = "Analyst"
     force_publish: Optional[bool] = False
 
+class ToggleLikeRequest(BaseModel):
+    liked: bool = True
+    username: Optional[str] = "operator"
+
+class RepostRequest(BaseModel):
+    author_username: Optional[str] = "operator"
+    author_name: Optional[str] = "Operator"
+    author_avatar: Optional[str] = None
+    author_role: Optional[str] = "Analyst"
+    commentary: Optional[str] = None
+
 @app.post("/api/posts/create")
 async def create_user_post(req: CreatePostRequest):
     """
@@ -308,6 +319,103 @@ async def add_post_comment(post_id: str, req: CreateCommentRequest):
         "warning_required": False,
         "comment": comment_dict,
         "toxicity": tox
+    }
+
+
+@app.post("/api/posts/{post_id}/like")
+async def toggle_post_like(post_id: str, req: ToggleLikeRequest):
+    """
+    Toggles user like state on a post, updates like counter and returns current total.
+    """
+    new_likes = timeline_db.toggle_like(post_id, req.liked, req.username or "operator")
+    return {"success": True, "post_id": post_id, "likes": new_likes, "liked": req.liked}
+
+
+@app.post("/api/posts/{post_id}/repost")
+async def repost_post(post_id: str, req: RepostRequest):
+    """
+    Creates a Repost / Retweet of an existing post, increments original post's share count,
+    and broadcasts the reposted post to the live ingestion stream.
+    """
+    import uuid
+    import time
+    from datetime import datetime
+
+    # 1. Increment original post shares
+    new_shares = timeline_db.increment_share(post_id)
+
+    # 2. Find original post details
+    orig_post = None
+    for p in timeline_db.records:
+        if p.get("id") == post_id:
+            orig_post = p
+            break
+
+    orig_author = orig_post.get("author", {}).get("username", "user") if orig_post else "user"
+    orig_text = orig_post.get("text", "") if orig_post else ""
+    orig_media_type = orig_post.get("media_type", "none") if orig_post else "none"
+    orig_media_url = orig_post.get("media_url") if orig_post else None
+    platform = orig_post.get("platform", "X") if orig_post else "X"
+
+    repost_text = req.commentary if req.commentary and req.commentary.strip() else f"RT @{orig_author}: {orig_text}"
+    
+    repost_id = f"repost_{uuid.uuid4().hex[:10]}"
+    now_epoch = time.time()
+    now_iso = datetime.fromtimestamp(now_epoch).strftime('%H:%M:%S')
+
+    sentiment_res = sentiment_engine.analyze(repost_text)
+    demo_res = demographic_engine.infer_profile("", repost_text, "Global Station")
+    avatar = req.author_avatar or f"https://api.dicebear.com/7.x/bottts/svg?seed={req.author_username}"
+
+    repost_payload = {
+        "id": repost_id,
+        "platform": platform,
+        "text": repost_text,
+        "media_type": orig_media_type,
+        "media_url": orig_media_url,
+        "interaction_type": "REPOST",
+        "target_user": orig_author,
+        "author": {
+            "name": req.author_name or "Operator",
+            "username": req.author_username or "operator",
+            "bio": "Aetheria Intelligence Contributor",
+            "location": "Global Station",
+            "followers": 15400,
+            "avatar": avatar,
+            "role": req.author_role or "Intelligence Operator",
+            "profile_url": "#"
+        },
+        "timestamp_epoch": now_epoch,
+        "timestamp_iso": now_iso,
+        "sentiment": sentiment_res,
+        "demographics": demo_res,
+        "engagement": {
+            "likes": 1,
+            "shares": 0,
+            "replies": 0
+        },
+        "comments_count": 0,
+        "raw_payload": None
+    }
+
+    timeline_db.insert(repost_payload)
+
+    # Broadcast live over WebSocket
+    try:
+        await stream_broadcaster.broadcast_custom_event({
+            "type": "LIVE_POST",
+            "post": repost_payload,
+            "kpis": timeline_db.get_kpis(),
+            "trends": trend_engine.get_trending_topics()
+        })
+    except Exception:
+        pass
+
+    return {
+        "success": True,
+        "repost": repost_payload,
+        "original_post_id": post_id,
+        "original_shares": new_shares
     }
 
 

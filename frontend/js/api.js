@@ -121,5 +121,23 @@ export const ApiClient = {
       body: JSON.stringify(payload)
     });
     return await res.json();
+  },
+
+  async likePost(postId, liked = true, username = 'operator') {
+    const res = await fetch(`${API_BASE}/api/posts/${encodeURIComponent(postId)}/like`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ liked, username })
+    });
+    return await res.json();
+  },
+
+  async repostPost(postId, payload = {}) {
+    const res = await fetch(`${API_BASE}/api/posts/${encodeURIComponent(postId)}/repost`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    return await res.json();
   }
 };

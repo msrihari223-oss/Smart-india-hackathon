@@ -10,7 +10,7 @@ from typing import Dict, Any, List, Optional
 from collections import defaultdict, Counter
 from sqlalchemy import func, desc, or_
 from backend.database.config import SessionLocal, engine, Base, init_engine
-from backend.database.models import PostRecord, NetworkInteractionRecord, TrendingTopicRecord, RealUserRecord, AppUserRecord, PostCommentRecord
+from backend.database.models import PostRecord, NetworkInteractionRecord, TrendingTopicRecord, RealUserRecord, AppUserRecord, PostCommentRecord, PostLikeRecord
 
 class PostgresRepository:
     def __init__(self):
@@ -57,6 +57,9 @@ class PostgresRepository:
             
             with SessionLocal() as db:
                 count = db.query(func.count(PostRecord.id)).scalar() or 0
+                comments_count = db.query(func.count(PostCommentRecord.id)).scalar() or 0
+                likes_count = db.query(func.count(PostLikeRecord.id)).scalar() or 0
+                users_count = db.query(func.count(AppUserRecord.id)).scalar() or 0
                 interactions = db.query(func.count(NetworkInteractionRecord.id)).scalar() or 0
                 trends = db.query(func.count(TrendingTopicRecord.id)).scalar() or 0
                 real_users_count = db.query(func.count(RealUserRecord.id)).scalar() or 0
@@ -65,6 +68,9 @@ class PostgresRepository:
                     "database": "PostgreSQL",
                     "tables": {
                         "post_records": count,
+                        "post_comments": comments_count,
+                        "post_likes": likes_count,
+                        "app_users": users_count,
                         "real_users": real_users_count,
                         "network_interactions": interactions,
                         "trending_topics": trends
@@ -225,6 +231,56 @@ class PostgresRepository:
             return True
         except Exception:
             return False
+
+    def toggle_like(self, post_id: str, liked: bool, username: str = "operator") -> int:
+        """Records like in post_likes table and updates post_records.likes_count in PostgreSQL"""
+        if not self.is_connected or SessionLocal is None:
+            return 1
+        try:
+            with SessionLocal() as db:
+                like_id = f"like_{post_id}_{username}"
+                if liked:
+                    like_rec = PostLikeRecord(
+                        id=like_id,
+                        post_id=post_id,
+                        username=username,
+                        created_at_epoch=time.time(),
+                        created_at_iso=time.strftime('%H:%M:%S')
+                    )
+                    db.merge(like_rec)
+                else:
+                    db.query(PostLikeRecord).filter(
+                        PostLikeRecord.post_id == post_id,
+                        PostLikeRecord.username == username
+                    ).delete()
+                
+                # Update PostRecord likes_count
+                post = db.query(PostRecord).filter(PostRecord.id == post_id).first()
+                if post:
+                    cur = post.likes_count or 0
+                    post.likes_count = max(0, cur + (1 if liked else -1))
+                    db.commit()
+                    return post.likes_count
+                else:
+                    db.commit()
+            return 1
+        except Exception:
+            return 1
+
+    def increment_share(self, post_id: str) -> int:
+        """Increments post share/repost count in PostgreSQL"""
+        if not self.is_connected or SessionLocal is None:
+            return 1
+        try:
+            with SessionLocal() as db:
+                post = db.query(PostRecord).filter(PostRecord.id == post_id).first()
+                if post:
+                    post.shares_count = (post.shares_count or 0) + 1
+                    db.commit()
+                    return post.shares_count
+            return 1
+        except Exception:
+            return 1
 
     def get_comments(self, post_id: str) -> List[Dict[str, Any]]:
         """Fetches all comments for a given post from PostgreSQL"""
