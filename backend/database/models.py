@@ -176,14 +176,14 @@ class PostLikeRecord(Base):
     """
     __tablename__ = "post_likes"
 
-    id = Column(String(128), primary_key=True, index=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
     post_id = Column(String(64), index=True, nullable=False)
     username = Column(String(64), index=True, nullable=False)
-    created_at_epoch = Column(Float, nullable=False)
-    created_at_iso = Column(String(32))
+    timestamp_epoch = Column(Float, nullable=False)
 
     __table_args__ = (
         Index("ix_post_likes_post_user", "post_id", "username"),
     )
+
 
 

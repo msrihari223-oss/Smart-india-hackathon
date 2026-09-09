@@ -238,16 +238,19 @@ class PostgresRepository:
             return 1
         try:
             with SessionLocal() as db:
-                like_id = f"like_{post_id}_{username}"
                 if liked:
-                    like_rec = PostLikeRecord(
-                        id=like_id,
-                        post_id=post_id,
-                        username=username,
-                        created_at_epoch=time.time(),
-                        created_at_iso=time.strftime('%H:%M:%S')
-                    )
-                    db.merge(like_rec)
+                    # Check if already liked to prevent duplicates
+                    existing = db.query(PostLikeRecord).filter(
+                        PostLikeRecord.post_id == post_id,
+                        PostLikeRecord.username == username
+                    ).first()
+                    if not existing:
+                        like_rec = PostLikeRecord(
+                            post_id=post_id,
+                            username=username,
+                            timestamp_epoch=time.time()
+                        )
+                        db.add(like_rec)
                 else:
                     db.query(PostLikeRecord).filter(
                         PostLikeRecord.post_id == post_id,
