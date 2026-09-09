@@ -121,7 +121,9 @@ class TimelineDatabase:
             if "inferred_age_bracket" in demo:
                 age_counter[demo["inferred_age_bracket"]] += 1
             if "geographic_origin" in demo:
-                geo_counter[demo["geographic_origin"]] += 1
+                geo_val = demo["geographic_origin"]
+                if geo_val and geo_val not in ("Global", "Global / Undisclosed", "Global / Unspecified"):
+                    geo_counter[geo_val] += 1
             if "inferred_language" in demo:
                 lang_counter[demo["inferred_language"]] += 1
             if "primary_interest" in demo:

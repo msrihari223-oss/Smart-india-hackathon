@@ -42,6 +42,12 @@ export const ApiClient = {
     return await res.json();
   },
 
+  async getInfluencerRankings(platform = 'all', country = 'all', category = 'all', search = '', sortBy = 'influence_score') {
+    const params = new URLSearchParams({ platform, country, category, search, sort_by: sortBy });
+    const res = await fetch(`${API_BASE}/api/influencers/rankings?${params.toString()}`);
+    return await res.json();
+  },
+
   async analyzeCustomPost(payload) {
     const res = await fetch(`${API_BASE}/api/analyze`, {
       method: 'POST',
@@ -144,5 +150,18 @@ export const ApiClient = {
       body: JSON.stringify(payload)
     });
     return await res.json();
+  },
+
+  async controlStreamSpeed(speedSeconds = 0.8) {
+    try {
+      const res = await fetch(`${API_BASE}/api/stream/control`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ speed_seconds: speedSeconds })
+      });
+      return await res.json();
+    } catch (e) {
+      return { status: 'error', error: e.message };
+    }
   }
 };

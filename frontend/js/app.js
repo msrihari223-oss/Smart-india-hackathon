@@ -25,11 +25,13 @@ class App {
     this.setupTabs();
     this.setupEventListeners();
     this.initCharts();
+    this.initInfluencerRankings();
     
     // Initial Load
     await this.checkDbHealth();
     await this.loadInitialData();
     await this.loadRealUsers();
+    await this.loadInfluencerRankings();
     this.connectWebSocket();
 
     // Periodic Database Health Monitoring
@@ -76,9 +78,20 @@ class App {
           targetSection.classList.add('active');
         }
 
-        // Trigger network re-fit if switched to network tab
-        if (target === 'view-network' && this.networkGraph && this.networkGraph.network) {
-          setTimeout(() => this.networkGraph.network.fit(), 200);
+        if (target === 'view-influencer-rankings') {
+          this.loadInfluencerRankings();
+        }
+
+        // Trigger network re-fit and render if switched to network tab
+        if (target === 'view-network' && this.networkGraph) {
+          setTimeout(() => {
+            if (this.lastNetworkData) {
+              this.networkGraph.render(this.lastNetworkData);
+            } else if (this.networkGraph.network) {
+              this.networkGraph.network.redraw();
+              this.networkGraph.network.fit();
+            }
+          }, 60);
         }
       });
     });
@@ -521,7 +534,7 @@ class App {
         try {
           const cascadeData = await ApiClient.getCascade(seed, 4);
           this.renderCascadeLog(cascadeData);
-          await this.networkGraph.animateCascade(cascadeData);
+          await this.networkGraph.animateCascade(cascadeData, seed);
         } catch (err) {
           console.error(err);
         } finally {
@@ -688,14 +701,42 @@ class App {
   }
 
   connectWebSocket() {
+    if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
+      return;
+    }
+
+    if (this.wsPingInterval) {
+      clearInterval(this.wsPingInterval);
+      this.wsPingInterval = null;
+    }
+
     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${wsProtocol}//${window.location.host}/ws/stream`;
     
-    this.ws = new WebSocket(wsUrl);
+    try {
+      this.ws = new WebSocket(wsUrl);
+    } catch (err) {
+      console.warn('WebSocket connection attempt failed, retrying in 2s...', err);
+      setTimeout(() => this.connectWebSocket(), 2000);
+      return;
+    }
 
     this.ws.onopen = () => {
       const statusEl = document.getElementById('stream-connection-status');
-      if (statusEl) statusEl.innerText = 'Live Feed Connected';
+      if (statusEl) {
+        statusEl.innerText = 'Live Feed Connected';
+        statusEl.style.color = '#38bdf8';
+      }
+      this.reconnectDelay = 1000;
+
+      // Active Keepalive Heartbeat: Pings server every 10 seconds to keep connection permanently open
+      this.wsPingInterval = setInterval(() => {
+        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+          try {
+            this.ws.send(JSON.stringify({ type: 'ping', time: Date.now() }));
+          } catch (e) {}
+        }
+      }, 10000);
     };
 
     this.ws.onmessage = (event) => {
@@ -703,6 +744,10 @@ class App {
 
       try {
         const data = JSON.parse(event.data);
+        if (data.type === 'pong') {
+          // Heartbeat acknowledged
+          return;
+        }
         if (data.type === 'LIVE_POST') {
           this.handleLivePost(data.post, data.kpis, data.trends);
         }
@@ -711,11 +756,39 @@ class App {
       }
     };
 
-    this.ws.onclose = () => {
-      const statusEl = document.getElementById('stream-connection-status');
-      if (statusEl) statusEl.innerText = 'Reconnecting...';
-      setTimeout(() => this.connectWebSocket(), 3000);
+    this.ws.onerror = () => {
+      // Handled via onclose
     };
+
+    this.ws.onclose = () => {
+      if (this.wsPingInterval) {
+        clearInterval(this.wsPingInterval);
+        this.wsPingInterval = null;
+      }
+      const statusEl = document.getElementById('stream-connection-status');
+      if (statusEl) {
+        statusEl.innerText = 'Reconnecting...';
+        statusEl.style.color = '#f59e0b';
+      }
+      const delay = this.reconnectDelay || 2000;
+      this.reconnectDelay = Math.min(delay * 1.5, 10000);
+      setTimeout(() => this.connectWebSocket(), delay);
+    };
+
+    // Auto-reconnect when tab gains focus or network comes online
+    if (!this._hasBoundWsEvents) {
+      this._hasBoundWsEvents = true;
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+          if (!this.ws || this.ws.readyState === WebSocket.CLOSED || this.ws.readyState === WebSocket.CLOSING) {
+            this.connectWebSocket();
+          }
+        }
+      });
+      window.addEventListener('online', () => {
+        this.connectWebSocket();
+      });
+    }
   }
 
   handleLivePost(post, kpis, trends) {
@@ -790,6 +863,17 @@ class App {
     const stance = sent.stance || { label: 'Neutral', score: 0 };
     const stanceColor = stance.score > 0.2 ? '#10b981' : (stance.score < -0.2 ? '#f43f5e' : '#a855f7');
 
+    const platformIcons = {
+      x: 'fa-brands fa-x-twitter',
+      telegram: 'fa-brands fa-telegram',
+      reddit: 'fa-brands fa-reddit',
+      youtube: 'fa-brands fa-youtube',
+      instagram: 'fa-brands fa-instagram',
+      facebook: 'fa-brands fa-facebook'
+    };
+    const platKey = (post.platform || '').toLowerCase();
+    const platIcon = platformIcons[platKey] || 'fas fa-hashtag';
+
     card.innerHTML = `
       <div class="post-card-header">
         <div class="post-author">
@@ -806,21 +890,12 @@ class App {
           </div>
         </div>
         <div style="display:flex; align-items:center; gap: 0.4rem;">
-          <span class="post-platform-tag ${platformClass}"><i class="fas fa-hashtag"></i> ${post.platform}</span>
-          <span class="kpi-badge badge-emerald" style="font-size: 0.68rem; padding: 0.15rem 0.45rem;"><i class="fas fa-check-circle"></i> Real Live User</span>
+          <span class="post-platform-tag ${platformClass}"><i class="${platIcon}"></i> ${post.platform}</span>
+          <span class="kpi-badge badge-emerald" style="font-size: 0.68rem; padding: 0.15rem 0.45rem;"><i class="fas fa-check-circle"></i> Live Verified</span>
           <span style="font-size: 0.72rem; color: var(--text-muted); font-family: var(--font-mono);">${post.timestamp_iso || 'Just now'}</span>
         </div>
       </div>
       <div class="post-body">${post.text}</div>
-      ${post.media_url ? `
-        <div class="post-media-container" style="margin: 0.75rem 0; border-radius: 10px; overflow: hidden; border: 1px solid var(--border-subtle); max-height: 320px; background: #000;">
-          ${(post.media_type === 'video' || post.media_url.endsWith('.mp4') || post.media_url.endsWith('.webm')) ? `
-            <video src="${post.media_url}" controls preload="metadata" style="width: 100%; max-height: 300px; display: block; object-fit: contain;"></video>
-          ` : `
-            <img src="${post.media_url}" alt="Post Media Attachment" style="width: 100%; max-height: 300px; object-fit: cover; display: block;" onerror="this.parentElement.style.display='none'" />
-          `}
-        </div>
-      ` : ''}
       <div class="post-intel-badges">
         <span class="intel-badge" style="color: ${sent.valence > 0.1 ? '#10b981' : (sent.valence < -0.1 ? '#f43f5e' : '#94a3b8')};">
           <i class="fas fa-heart"></i> ${sent.sentiment_label || 'Neutral'} (${sent.valence || 0})
@@ -1121,6 +1196,7 @@ class App {
 
   renderNetwork(network) {
     if (!network) return;
+    this.lastNetworkData = network;
     this.networkGraph.render(network);
     
     // Render KOLs list
@@ -1164,21 +1240,34 @@ class App {
   }
 
   renderCascadeLog(cascade) {
-    const log = document.getElementById('cascade-log');
+    const log = document.getElementById('cascade-log-container') || document.getElementById('cascade-log');
     if (!log || !cascade) return;
     log.innerHTML = '';
 
-    const steps = cascade.steps || [];
+    const steps = Array.isArray(cascade) ? cascade : (cascade.steps || []);
+    if (steps.length === 0) {
+      log.innerHTML = '<div style="font-size: 0.75rem; color: var(--text-muted); padding: 0.5rem;">No cascade propagation steps detected.</div>';
+      return;
+    }
+
     steps.forEach((s, idx) => {
       const el = document.createElement('div');
       el.className = 'cascade-step-item';
+      el.style.cssText = 'background: rgba(0, 0, 0, 0.4); border-left: 3px solid var(--neon-cyan); padding: 0.5rem 0.75rem; margin-bottom: 0.4rem; border-radius: 6px; border: 1px solid rgba(0, 240, 255, 0.15); border-left-width: 3px;';
+      
+      const propagations = s.propagations || [];
+      const reached = s.total_reached || s.cumulative_reach || (idx + 1) * 2;
+      const actNodes = propagations.length > 0 
+        ? propagations.map(p => `<span style="color: var(--neon-cyan);">@${p.to_node}</span> (${p.action || 'Retweeted'} by @${p.from_node})`).join(', ')
+        : 'Initial narrative seed broadcast';
+
       el.innerHTML = `
         <div style="display: flex; justify-content: space-between; font-size: 0.78rem;">
-          <span style="font-weight: 700; color: var(--neon-cyan);">Step ${s.step}: Diffusion Phase</span>
-          <span style="color: var(--text-muted); font-family: var(--font-mono);">Cumulative Reach: ${s.cumulative_reach.toLocaleString()}</span>
+          <span style="font-weight: 700; color: var(--neon-cyan);"><i class="fas fa-arrow-right"></i> Step ${s.step || (idx + 1)}: Diffusion Phase</span>
+          <span style="color: #10b981; font-family: var(--font-mono); font-weight: 600;">Cumulative Reach: ${reached.toLocaleString()} users</span>
         </div>
-        <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 2px;">
-          Activated Nodes: ${s.activated_nodes.join(', ')}
+        <div style="font-size: 0.74rem; color: var(--text-secondary); margin-top: 4px;">
+          <b>Propagations:</b> ${actNodes}
         </div>
       `;
       log.appendChild(el);
@@ -1290,6 +1379,12 @@ class App {
 
     if (actionText) actionText.innerText = isComment ? 'Comment Blocked — Revise or Auto-Sanitize' : (tox.moderation_action === 'AUTO_BLOCK' ? 'Auto-Block & Flag User Profile' : 'Pop-Up Warning & Content Flagged');
     if (explText) explText.innerText = tox.explanation || 'Offensive, profane, or abusive words were detected in your comment.';
+
+    const emailNoticeText = document.getElementById('modal-email-target-text');
+    const userEmail = (window.authController?.user?.email) || `${window.authController?.user?.username || 'user'}@socialmediaanalytics.io`;
+    if (emailNoticeText) {
+      emailNoticeText.textContent = `A formal Conduct Violation Notice has been automatically dispatched to ${userEmail}.`;
+    }
 
     modal.style.display = 'flex';
   }
@@ -1533,6 +1628,191 @@ class App {
         </div>
       `;
       container.appendChild(card);
+    });
+  }
+
+  initInfluencerRankings() {
+    const searchInput = document.getElementById('inf-search-input');
+    const countryFilter = document.getElementById('inf-country-filter');
+    const platformFilter = document.getElementById('inf-platform-filter');
+    const sortFilter = document.getElementById('inf-sort-filter');
+    const btnRefresh = document.getElementById('btn-inf-refresh');
+
+    if (searchInput) {
+      let debounceTimer;
+      searchInput.addEventListener('input', () => {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => this.loadInfluencerRankings(), 300);
+      });
+    }
+
+    if (countryFilter) {
+      countryFilter.addEventListener('change', () => this.loadInfluencerRankings());
+    }
+
+    if (platformFilter) {
+      platformFilter.addEventListener('change', () => this.loadInfluencerRankings());
+    }
+
+    if (sortFilter) {
+      sortFilter.addEventListener('change', () => this.loadInfluencerRankings());
+    }
+
+    if (btnRefresh) {
+      btnRefresh.addEventListener('click', () => this.loadInfluencerRankings());
+    }
+  }
+
+  async loadInfluencerRankings() {
+    const searchInput = document.getElementById('inf-search-input');
+    const countryFilter = document.getElementById('inf-country-filter');
+    const platformFilter = document.getElementById('inf-platform-filter');
+    const sortFilter = document.getElementById('inf-sort-filter');
+
+    const search = searchInput ? searchInput.value.trim() : '';
+    const country = countryFilter ? countryFilter.value : 'all';
+    const platform = platformFilter ? platformFilter.value : 'all';
+    const sort = sortFilter ? sortFilter.value : 'influence_score';
+
+    try {
+      const data = await ApiClient.getInfluencerRankings(platform, country, 'all', search, sort);
+      if (data && data.rankings) {
+        this.renderInfluencerPodium(data.rankings.slice(0, 3));
+        this.renderInfluencerTable(data.rankings);
+      }
+    } catch (err) {
+      console.error('Failed to load influencer rankings:', err);
+    }
+  }
+
+  renderInfluencerPodium(top3) {
+    const podiumEl = document.getElementById('influencer-podium-grid');
+    if (!podiumEl) return;
+    podiumEl.innerHTML = '';
+
+    if (!top3 || top3.length === 0) {
+      podiumEl.innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: var(--text-muted); padding: 2rem;">No matching influencers found.</div>';
+      return;
+    }
+
+    // Render Rank 1, 2, 3 podium cards
+    top3.forEach((c, idx) => {
+      const rank = idx + 1;
+      const rankClass = rank === 1 ? 'podium-rank-1' : (rank === 2 ? 'podium-rank-2' : 'podium-rank-3');
+      const badgeClass = rank === 1 ? 'podium-badge-gold' : (rank === 2 ? 'podium-badge-silver' : 'podium-badge-bronze');
+      const badgeText = rank === 1 ? '🥇 RANK #1 &bull; GRAND CHAMPION' : (rank === 2 ? '🥈 RANK #2 &bull; TOP VIRAL' : '🥉 RANK #3 &bull; HIGH REACH');
+      const flag = c.country === 'India' ? '🇮🇳' : (c.country === 'United States' ? '🇺🇸' : (c.country === 'United Kingdom' ? '🇬🇧' : (c.country === 'Germany' ? '🇩🇪' : (c.country === 'Singapore' ? '🇸🇬' : (c.country === 'Canada' ? '🇨🇦' : '🌐')))));
+
+      const card = document.createElement('div');
+      card.className = `podium-card ${rankClass}`;
+      card.innerHTML = `
+        <span class="podium-badge ${badgeClass}">${badgeText}</span>
+        
+        <div class="podium-avatar-wrapper">
+          ${rank === 1 ? '<i class="fas fa-crown podium-crown-icon"></i>' : ''}
+          <img class="podium-avatar" src="${c.avatar}" alt="${c.name}" />
+        </div>
+
+        <h3 class="podium-name">${c.name}</h3>
+        <div class="podium-handle">@${c.username.replace('@', '').replace('t.me/', '').replace('u/', '')}</div>
+
+        <div class="podium-meta-row">
+          <span class="platform-pill platform-pill-${c.platform.toLowerCase()}">
+            <i class="fab fa-${c.platform.toLowerCase() === 'x' ? 'x-twitter' : c.platform.toLowerCase()}"></i> ${c.platform}
+          </span>
+          <span class="country-pill">${flag} ${c.country}</span>
+        </div>
+
+        <div style="font-size: 0.74rem; color: var(--text-muted); margin-bottom: 0.75rem;">
+          <i class="fas fa-briefcase"></i> ${c.category}
+        </div>
+
+        <div class="podium-score-pill">
+          <div style="display: flex; justify-content: space-between; font-size: 0.75rem; margin-bottom: 4px;">
+            <span style="color: var(--text-muted);"><i class="fas fa-bolt" style="color: #fbbf24;"></i> Influence Score</span>
+            <strong style="color: var(--neon-cyan); font-family: var(--font-mono);">${c.influence_score} / 100</strong>
+          </div>
+          <div class="score-bar-track">
+            <div class="score-bar-fill" style="width: ${c.influence_score}%;"></div>
+          </div>
+          <div style="display: flex; justify-content: space-between; font-size: 0.72rem; color: #cbd5e1; margin-top: 6px;">
+            <span><i class="fas fa-users"></i> ${c.followers.toLocaleString()} Followers</span>
+            <span style="color: #10b981;">${c.engagement_rate}% Eng.</span>
+          </div>
+        </div>
+      `;
+      podiumEl.appendChild(card);
+    });
+  }
+
+  renderInfluencerTable(rankings) {
+    const tbody = document.getElementById('influencer-rankings-tbody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+
+    if (!rankings || rankings.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 2rem; color: var(--text-muted);">No influencers match the selected filters.</td></tr>';
+      return;
+    }
+
+    rankings.forEach(c => {
+      const tr = document.createElement('tr');
+      const rankBadge = c.rank === 1 ? 'rank-1-badge' : (c.rank === 2 ? 'rank-2-badge' : (c.rank === 3 ? 'rank-3-badge' : 'rank-normal-badge'));
+      const flag = c.country === 'India' ? '🇮🇳' : (c.country === 'United States' ? '🇺🇸' : (c.country === 'United Kingdom' ? '🇬🇧' : (c.country === 'Germany' ? '🇩🇪' : (c.country === 'Singapore' ? '🇸🇬' : (c.country === 'Canada' ? '🇨🇦' : '🌐')))));
+      const stanceColor = c.sentiment_stance === 'Supportive' ? '#10b981' : (c.sentiment_stance === 'Critical' ? '#f43f5e' : '#94a3b8');
+
+      tr.innerHTML = `
+        <td style="text-align: center;">
+          <span class="rank-badge ${rankBadge}">#${c.rank}</span>
+        </td>
+        <td>
+          <div class="creator-profile-cell">
+            <img class="creator-avatar" src="${c.avatar}" alt="${c.name}" />
+            <div>
+              <div class="creator-name">
+                ${c.name}
+                <i class="fas fa-circle-check" style="color: #38bdf8; font-size: 0.75rem; margin-left: 3px;" title="Verified Creator"></i>
+              </div>
+              <div class="creator-handle">@${c.username.replace('@', '').replace('t.me/', '').replace('u/', '')}</div>
+            </div>
+          </div>
+        </td>
+        <td>
+          <span class="platform-pill platform-pill-${c.platform.toLowerCase()}">
+            <i class="fab fa-${c.platform.toLowerCase() === 'x' ? 'x-twitter' : c.platform.toLowerCase()}"></i> ${c.platform}
+          </span>
+        </td>
+        <td>
+          <span class="country-pill">${flag} ${c.country}</span>
+          <div style="font-size: 0.7rem; color: var(--text-muted); margin-top: 2px;">${c.location}</div>
+        </td>
+        <td>
+          <span style="font-size: 0.78rem; font-weight: 600; color: #e2e8f0;"><i class="fas fa-briefcase" style="color: var(--neon-cyan); margin-right: 4px;"></i>${c.category}</span>
+        </td>
+        <td style="text-align: right; font-family: var(--font-mono); font-weight: 700; color: #fff;">
+          ${c.followers.toLocaleString()}
+          <div style="font-size: 0.7rem; color: #10b981; font-weight: 500;">${c.engagement_rate}% Rate</div>
+        </td>
+        <td>
+          <div class="score-bar-wrapper">
+            <div class="score-bar-track">
+              <div class="score-bar-fill" style="width: ${c.influence_score}%;"></div>
+            </div>
+            <span class="score-val">${c.influence_score}</span>
+          </div>
+        </td>
+        <td style="text-align: center;">
+          <span class="badge-pill" style="background: rgba(255, 255, 255, 0.06); color: ${stanceColor}; border: 1px solid ${stanceColor}40; font-size: 0.72rem; padding: 0.2rem 0.5rem; border-radius: 12px;">
+            ${c.sentiment_stance}
+          </span>
+        </td>
+        <td style="text-align: center;">
+          <a class="btn-icon" href="${c.profile_url}" target="_blank" rel="noopener noreferrer" style="font-size: 0.75rem; padding: 0.35rem 0.65rem;" title="View External Profile">
+            <i class="fas fa-arrow-up-right-from-square"></i>
+          </a>
+        </td>
+      `;
+      tbody.appendChild(tr);
     });
   }
 

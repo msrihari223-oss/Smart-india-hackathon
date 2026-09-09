@@ -6,6 +6,7 @@
 
 export class NetworkGraphManager {
   constructor(containerId) {
+    this.containerId = containerId;
     this.container = document.getElementById(containerId);
     this.network = null;
     this.nodesDataSet = null;
@@ -16,8 +17,19 @@ export class NetworkGraphManager {
   }
 
   render(networkData) {
-    if (!this.container || typeof vis === 'undefined') return;
+    if (!this.container) {
+      this.container = document.getElementById(this.containerId);
+    }
+    if (!this.container) return;
+    if (!networkData) return;
     this.rawNetworkData = networkData;
+
+    const visObj = window.vis || (typeof vis !== 'undefined' ? vis : null);
+    if (!visObj) {
+      // Retry in 300ms if script is still loading
+      setTimeout(() => this.render(networkData), 300);
+      return;
+    }
 
     // Palette with distinct vibrant community hues
     const communityColors = [
@@ -33,8 +45,7 @@ export class NetworkGraphManager {
     const visNodes = (networkData.nodes || []).map(node => {
       const commIdx = (node.community || 0) % communityColors.length;
       const col = communityColors[commIdx];
-      // Bound node size between 14px and 26px to prevent giant bubble clumping
-      const cleanSize = Math.max(13, Math.min(24, Math.round(12 + (node.influence_score || 50) * 0.12)));
+      const cleanSize = Math.max(14, Math.min(26, Math.round(12 + (node.influence_score || 50) * 0.14)));
 
       return {
         id: node.id,
@@ -65,7 +76,7 @@ export class NetworkGraphManager {
         shadow: {
           enabled: true,
           color: col.glow,
-          size: 10,
+          size: 12,
           x: 0,
           y: 0
         },
@@ -87,8 +98,8 @@ export class NetworkGraphManager {
       const isPos = edge.sentiment > 0.05;
       const isNeg = edge.sentiment < -0.05;
       const strokeColor = isPos 
-        ? 'rgba(16, 185, 129, 0.65)' 
-        : (isNeg ? 'rgba(244, 63, 94, 0.65)' : 'rgba(6, 182, 212, 0.45)');
+        ? 'rgba(16, 185, 129, 0.75)' 
+        : (isNeg ? 'rgba(244, 63, 94, 0.75)' : 'rgba(6, 182, 212, 0.55)');
 
       return {
         id: `edge_${idx}`,
@@ -104,9 +115,9 @@ export class NetworkGraphManager {
           color: strokeColor,
           highlight: '#00f0ff',
           hover: '#ffffff',
-          opacity: 0.8
+          opacity: 0.85
         },
-        width: Math.max(1.2, Math.min(3.5, 1 + (edge.weight || 1) * 0.4)),
+        width: Math.max(1.5, Math.min(4.0, 1 + (edge.weight || 1) * 0.5)),
         smooth: {
           type: 'continuous',
           roundness: 0.2
@@ -115,24 +126,24 @@ export class NetworkGraphManager {
       };
     });
 
-    this.nodesDataSet = new vis.DataSet(visNodes);
-    this.edgesDataSet = new vis.DataSet(visEdges);
+    this.nodesDataSet = new visObj.DataSet(visNodes);
+    this.edgesDataSet = new visObj.DataSet(visEdges);
 
     // Physics Engine with Anti-Collision / Collision Avoidance
     const options = {
       physics: {
         solver: 'forceAtlas2Based',
         forceAtlas2Based: {
-          gravitationalConstant: -160,    // Strong repulsion prevents clumping
-          centralGravity: 0.012,
-          springLength: 170,             // Spacious links so nodes don't overlap
+          gravitationalConstant: -140,
+          centralGravity: 0.015,
+          springLength: 160,
           springConstant: 0.08,
-          damping: 0.72,
-          avoidOverlap: 1.0              // 100% collision avoidance between nodes
+          damping: 0.75,
+          avoidOverlap: 1.0
         },
         stabilization: {
           enabled: true,
-          iterations: 180,
+          iterations: 150,
           updateInterval: 25
         }
       },
@@ -157,12 +168,35 @@ export class NetworkGraphManager {
       }
     };
 
-    // Instantiate Vis Network
-    this.network = new vis.Network(
+    // Instantiate or update Vis Network
+    if (this.network) {
+      try {
+        this.network.setData({ nodes: this.nodesDataSet, edges: this.edgesDataSet });
+        this.network.setOptions(options);
+        setTimeout(() => {
+          if (this.network) {
+            this.network.redraw();
+            this.network.fit();
+          }
+        }, 80);
+        return;
+      } catch (e) {
+        this.network = null;
+      }
+    }
+
+    this.network = new visObj.Network(
       this.container,
       { nodes: this.nodesDataSet, edges: this.edgesDataSet },
       options
     );
+
+    setTimeout(() => {
+      if (this.network) {
+        this.network.redraw();
+        this.network.fit();
+      }
+    }, 150);
 
     // Click handler for node selection & neighborhood focus
     this.network.on('click', (params) => {
@@ -180,11 +214,8 @@ export class NetworkGraphManager {
     });
 
     // Hover effect: highlight connected edges
-    this.network.on('hoverNode', (params) => {
-      this.container.style.cursor = 'pointer';
-    });
-    this.network.on('blurNode', (params) => {
-      this.container.style.cursor = 'default';
+    this.network.on('hoverNode', () => {
+      if (this.container) this.container.style.cursor = 'pointer';
     });
   }
 
@@ -297,23 +328,49 @@ export class NetworkGraphManager {
     }
   }
 
-  async animateCascade(cascadeTimeline) {
-    if (!this.network || !cascadeTimeline || cascadeTimeline.length === 0) return;
+  async animateCascade(cascadeTimeline, seedId = null) {
+    if (!this.network || !cascadeTimeline) return;
+    const steps = Array.isArray(cascadeTimeline) ? cascadeTimeline : (cascadeTimeline.steps || []);
+    if (steps.length === 0) return;
 
-    for (const step of cascadeTimeline) {
-      const stepNodes = (step.propagations || []).map(p => p.to_node);
+    // First highlight seed node
+    if (seedId && this.nodesDataSet.get(seedId)) {
+      this.nodesDataSet.update({
+        id: seedId,
+        color: { background: '#f43f5e', border: '#ffffff' },
+        shadow: { color: '#f43f5e', size: 30 }
+      });
+      this.network.focus(seedId, { scale: 1.15, animation: { duration: 400 } });
+    }
+
+    for (const step of steps) {
+      const propagations = step.propagations || [];
+      const stepNodes = propagations.map(p => p.to_node);
       
       stepNodes.forEach(nId => {
         if (this.nodesDataSet.get(nId)) {
           this.nodesDataSet.update({
             id: nId,
-            color: { background: '#f43f5e', border: '#ffffff' },
-            shadow: { color: '#f43f5e', size: 25 }
+            color: { background: '#ec4899', border: '#ffffff' },
+            shadow: { color: '#ec4899', size: 25 }
           });
         }
       });
 
-      await new Promise(r => setTimeout(r, 650));
+      // Highlight active edges
+      const edgeUpdates = [];
+      propagations.forEach(p => {
+        this.edgesDataSet.forEach(e => {
+          if ((e.from === p.from_node && e.to === p.to_node) || (e.from === p.to_node && e.to === p.from_node)) {
+            edgeUpdates.push({ id: e.id, color: { color: '#ec4899', highlight: '#f43f5e', opacity: 1.0 }, width: 4.5 });
+          }
+        });
+      });
+      if (edgeUpdates.length > 0) {
+        this.edgesDataSet.update(edgeUpdates);
+      }
+
+      await new Promise(r => setTimeout(r, 700));
     }
   }
 }

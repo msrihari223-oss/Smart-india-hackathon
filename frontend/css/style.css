@@ -444,17 +444,30 @@ header {
 }
 
 .post-card {
-  background: rgba(12, 16, 26, 0.7);
+  background: rgba(12, 16, 26, 0.75);
   border: 1px solid var(--border-subtle);
   border-radius: 12px;
   padding: 1rem;
-  transition: var(--transition);
-  animation: slideIn 0.35s ease-out;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: slideInPost 0.22s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-@keyframes slideIn {
-  from { opacity: 0; transform: translateY(-8px); }
-  to { opacity: 1; transform: translateY(0); }
+@keyframes slideInPost {
+  0% {
+    opacity: 0;
+    transform: translateY(-16px) scale(0.98);
+    border-color: rgba(0, 240, 255, 0.6);
+    box-shadow: 0 0 15px rgba(0, 240, 255, 0.2);
+  }
+  60% {
+    border-color: rgba(0, 240, 255, 0.3);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    border-color: var(--border-subtle);
+    box-shadow: none;
+  }
 }
 
 .post-card:hover {
@@ -1742,6 +1755,324 @@ header {
 
 .btn-post-submit-gradient:active {
   transform: translateY(0);
+}
+
+/* ==========================================================================
+   Influencer & KOL Rankings Leaderboard Styles
+   ========================================================================== */
+
+.influencer-stat-chip {
+  display: flex;
+  flex-direction: column;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  padding: 0.5rem 0.9rem;
+  min-width: 130px;
+}
+
+.influencer-stat-chip .lbl {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  color: var(--text-muted);
+}
+
+.influencer-stat-chip .val {
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: #fff;
+  font-family: var(--font-mono);
+  margin-top: 2px;
+}
+
+/* Podium Grid */
+.influencer-podium-container {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.25rem;
+  margin-top: 0.5rem;
+}
+
+@media (max-width: 900px) {
+  .influencer-podium-container {
+    grid-template-columns: 1fr;
+  }
+}
+
+.podium-card {
+  position: relative;
+  background: linear-gradient(180deg, rgba(20, 27, 45, 0.85) 0%, rgba(10, 14, 24, 0.95) 100%);
+  border-radius: 16px;
+  padding: 1.5rem 1.25rem;
+  text-align: center;
+  transition: all 0.3s ease;
+  overflow: hidden;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+}
+
+.podium-card:hover {
+  transform: translateY(-6px);
+}
+
+.podium-rank-1 {
+  border: 2px solid #fbbf24;
+  box-shadow: 0 0 25px rgba(251, 191, 36, 0.25);
+  order: 2;
+}
+
+.podium-rank-2 {
+  border: 2px solid #94a3b8;
+  box-shadow: 0 0 20px rgba(148, 163, 184, 0.2);
+  order: 1;
+}
+
+.podium-rank-3 {
+  border: 2px solid #b45309;
+  box-shadow: 0 0 20px rgba(180, 83, 9, 0.2);
+  order: 3;
+}
+
+.podium-badge {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 0.25rem 0.65rem;
+  border-radius: 20px;
+  letter-spacing: 0.5px;
+}
+
+.podium-badge-gold {
+  background: linear-gradient(135deg, #fbbf24, #d97706);
+  color: #000;
+}
+
+.podium-badge-silver {
+  background: linear-gradient(135deg, #cbd5e1, #64748b);
+  color: #000;
+}
+
+.podium-badge-bronze {
+  background: linear-gradient(135deg, #d97706, #92400e);
+  color: #fff;
+}
+
+.podium-avatar-wrapper {
+  position: relative;
+  width: 76px;
+  height: 76px;
+  margin: 0.75rem auto 1rem auto;
+}
+
+.podium-avatar {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  border: 3px solid rgba(255, 255, 255, 0.2);
+  background: #0f172a;
+}
+
+.podium-rank-1 .podium-avatar {
+  border-color: #fbbf24;
+  box-shadow: 0 0 20px rgba(251, 191, 36, 0.6);
+}
+
+.podium-rank-2 .podium-avatar {
+  border-color: #cbd5e1;
+  box-shadow: 0 0 15px rgba(203, 213, 225, 0.5);
+}
+
+.podium-rank-3 .podium-avatar {
+  border-color: #f59e0b;
+  box-shadow: 0 0 15px rgba(245, 158, 11, 0.5);
+}
+
+.podium-crown-icon {
+  position: absolute;
+  top: -16px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 1.4rem;
+  color: #fbbf24;
+  filter: drop-shadow(0 0 8px rgba(251, 191, 36, 0.8));
+}
+
+.podium-name {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #fff;
+  margin: 0 0 2px 0;
+}
+
+.podium-handle {
+  font-size: 0.78rem;
+  color: var(--neon-cyan);
+  font-family: var(--font-mono);
+  margin-bottom: 0.6rem;
+}
+
+.podium-meta-row {
+  display: flex;
+  justify-content: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.podium-score-pill {
+  background: rgba(0, 240, 255, 0.1);
+  border: 1px solid rgba(0, 240, 255, 0.25);
+  border-radius: 8px;
+  padding: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+/* Rankings Table */
+.influencer-rankings-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.84rem;
+  text-align: left;
+}
+
+.influencer-rankings-table th {
+  padding: 0.85rem 1rem;
+  color: var(--text-muted);
+  font-weight: 600;
+  border-bottom: 1px solid var(--border-glow);
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  background: rgba(15, 23, 42, 0.6);
+}
+
+.influencer-rankings-table td {
+  padding: 0.9rem 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  vertical-align: middle;
+}
+
+.influencer-rankings-table tr:hover td {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.rank-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  font-weight: 800;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+}
+
+.rank-1-badge {
+  background: linear-gradient(135deg, #fbbf24, #d97706);
+  color: #000;
+  box-shadow: 0 0 12px rgba(251, 191, 36, 0.5);
+}
+
+.rank-2-badge {
+  background: linear-gradient(135deg, #cbd5e1, #64748b);
+  color: #000;
+  box-shadow: 0 0 10px rgba(203, 213, 225, 0.4);
+}
+
+.rank-3-badge {
+  background: linear-gradient(135deg, #d97706, #92400e);
+  color: #fff;
+  box-shadow: 0 0 10px rgba(217, 119, 6, 0.4);
+}
+
+.rank-normal-badge {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-muted);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.creator-profile-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.creator-avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: #0f172a;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.creator-name {
+  font-weight: 700;
+  color: #fff;
+  font-size: 0.88rem;
+}
+
+.creator-handle {
+  font-size: 0.74rem;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+.platform-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.6rem;
+  border-radius: 6px;
+  font-size: 0.74rem;
+  font-weight: 600;
+}
+
+.platform-pill-x { background: rgba(255, 255, 255, 0.1); color: #fff; }
+.platform-pill-youtube { background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); }
+.platform-pill-instagram { background: rgba(236, 72, 153, 0.15); color: #f472b6; border: 1px solid rgba(236, 72, 153, 0.3); }
+.platform-pill-telegram { background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); }
+.platform-pill-reddit { background: rgba(249, 115, 22, 0.15); color: #fb923c; border: 1px solid rgba(249, 115, 22, 0.3); }
+.platform-pill-facebook { background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3); }
+
+.country-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.76rem;
+  color: #cbd5e1;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+}
+
+.score-bar-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.score-bar-track {
+  flex: 1;
+  height: 7px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.score-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #00f0ff, #a855f7);
+}
+
+.score-val {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 0.82rem;
+  color: var(--neon-cyan);
+  min-width: 36px;
 }
 
 

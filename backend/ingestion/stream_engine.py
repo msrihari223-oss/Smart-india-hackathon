@@ -16,15 +16,14 @@ class StreamBroadcaster:
     def __init__(self):
         self.active_connections: Set[WebSocket] = set()
         self.is_running = False
-        self.stream_delay = 2.0  # seconds between live posts
+        self.stream_delay = 0.8  # fast one-by-one rapid live streaming
 
     async def connect(self, websocket: WebSocket):
         await websocket.accept()
         self.active_connections.add(websocket)
 
     def disconnect(self, websocket: WebSocket):
-        if websocket in self.active_connections:
-            self.active_connections.remove(websocket)
+        self.active_connections.discard(websocket)
 
     async def broadcast_live_event(self):
         """
@@ -38,6 +37,10 @@ class StreamBroadcaster:
                 if not new_post:
                     new_post = generate_live_post()
                 
+                # Automatically store in PostgreSQL database
+                if new_post:
+                    timeline_db.insert(new_post)
+
                 # 2. Fetch instant KPIs and Trends
                 kpis = timeline_db.get_kpis()
                 trends = trend_engine.get_trending_topics()

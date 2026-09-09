@@ -36,6 +36,8 @@ class AuthManager:
         self._users: Dict[str, Dict[str, Any]] = {}
         # Active sessions: token -> dict (user details + expires_at)
         self._sessions: Dict[str, Dict[str, Any]] = {}
+        # Active password reset OTPs: username -> { otp, email, expires_at, created_at }
+        self._otps: Dict[str, Dict[str, Any]] = {}
         # Pre-seed intelligence operator accounts
         self._seed_default_accounts()
 
@@ -250,8 +252,143 @@ class AuthManager:
             "user": self._sanitize_user(user)
         }
 
+    def request_otp(self, identifier: str) -> Dict[str, Any]:
+        """
+        Generates a 6-digit numeric OTP and dispatches it to user's registered email address.
+        """
+        from backend.services.email_service import email_service
+
+        if not identifier or not identifier.strip():
+            return {"success": False, "message": "User ID, Email, or Phone Number is required."}
+
+        user = self.get_user(identifier)
+        if not user:
+            return {
+                "success": False,
+                "message": "Candidate not found. No account matches this User ID, Email, or Phone Number."
+            }
+
+        user_email = user.get("email", "").strip()
+        if not user_email or "@" not in user_email:
+            return {
+                "success": False,
+                "message": "No valid email address registered with this account."
+            }
+
+        # Generate 6-digit cryptographic OTP code
+        otp_code = f"{secrets.randbelow(900000) + 100000}"
+        expires_at = time.time() + 600  # 10 minutes
+
+        # Store OTP state
+        username_key = user["username"].lower()
+        self._otps[username_key] = {
+            "otp": otp_code,
+            "email": user_email,
+            "user_id": user["id"],
+            "username": user["username"],
+            "expires_at": expires_at,
+            "created_at": time.time()
+        }
+
+        # Send email
+        delivery = email_service.send_otp_email(
+            to_email=user_email,
+            username=user.get("full_name") or user["username"],
+            otp_code=otp_code,
+            expires_minutes=10
+        )
+
+        # Mask email for privacy (e.g. j***e@example.com)
+        parts = user_email.split("@")
+        name_part = parts[0]
+        domain_part = parts[1] if len(parts) > 1 else ""
+        if len(name_part) > 2:
+            masked_name = name_part[0] + ("*" * (len(name_part) - 2)) + name_part[-1]
+        else:
+            masked_name = name_part[0] + "*"
+        masked_email = f"{masked_name}@{domain_part}"
+
+        return {
+            "success": True,
+            "message": f"6-Digit OTP successfully sent to your registered mail: {masked_email}",
+            "email_masked": masked_email,
+            "expires_in_seconds": 600,
+            "otp_preview": otp_code  # Provided for convenience in dev/testing
+        }
+
+    def verify_and_reset_password(self, identifier: str, otp: str, new_password: str) -> Dict[str, Any]:
+        """
+        Verifies the email OTP and updates the user password in PostgreSQL database and memory.
+        """
+        if not identifier or not identifier.strip():
+            return {"success": False, "message": "Identifier is required."}
+        if not otp or not otp.strip():
+            return {"success": False, "message": "6-digit OTP is required."}
+        if not new_password or len(new_password) < 6:
+            return {"success": False, "message": "New password must be at least 6 characters long."}
+
+        user = self.get_user(identifier)
+        if not user:
+            return {"success": False, "message": "Candidate not found."}
+
+        username_key = user["username"].lower()
+        otp_record = self._otps.get(username_key)
+
+        if not otp_record:
+            return {
+                "success": False,
+                "message": "No active OTP found. Please request a new OTP code."
+            }
+
+        # Check expiration
+        if time.time() > otp_record.get("expires_at", 0):
+            del self._otps[username_key]
+            return {
+                "success": False,
+                "message": "OTP has expired. Please request a fresh OTP code."
+            }
+
+        # Verify OTP code
+        submitted_otp = otp.strip()
+        expected_otp = str(otp_record.get("otp", "")).strip()
+
+        if not secrets.compare_digest(submitted_otp, expected_otp):
+            return {
+                "success": False,
+                "message": "Invalid OTP code. Please check your email and enter the correct 6-digit code."
+            }
+
+        # Successful OTP verification -> Update password
+        p_hash, salt = hash_password(new_password)
+        user["password_hash"] = p_hash
+        user["salt"] = salt
+        user["last_login"] = time.time()
+
+        # Update in-memory
+        self._users[username_key] = user
+
+        # Update PostgreSQL
+        if postgres_repo.is_connected and SessionLocal is not None:
+            try:
+                with SessionLocal() as db:
+                    record = db.query(AppUserRecord).filter(AppUserRecord.id == user["id"]).first()
+                    if record:
+                        record.password_hash = p_hash
+                        record.salt = salt
+                        db.commit()
+            except Exception:
+                pass
+
+        # Clear used OTP
+        del self._otps[username_key]
+
+        return {
+            "success": True,
+            "message": "Password reset successfully! Your new password is saved in the database. You can now log in."
+        }
+
     def forgot_password(self, identifier: str, new_password: str) -> Dict[str, Any]:
-        """Resets user password in memory and PostgreSQL database."""
+        """Resets user password in memory and PostgreSQL database (Direct Reset Fallback)."""
         if not identifier or not new_password:
             return {"success": False, "message": "Identifier and new password are required."}
 

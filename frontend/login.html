@@ -828,59 +828,100 @@
         </button>
       </form>
 
-      <!-- ================= 3. FORGOT PASSWORD FORM ================= -->
-      <form id="form-forgot" style="display: none;" onsubmit="handleForgotPassword(event)">
+      <!-- ================= 3. FORGOT PASSWORD WITH EMAIL OTP FORM ================= -->
+      <div id="form-forgot" style="display: none;">
         <div style="text-align: center; margin-bottom: 1.25rem;">
-          <h3 style="font-size: 1.1rem; color: var(--neon-cyan);">Reset Security Password</h3>
-          <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.2rem;">
-            Provide your registered User ID, Email, or Phone Number to update your credentials in the database.
+          <div style="width: 48px; height: 48px; margin: 0 auto 0.6rem; border-radius: 50%; background: rgba(6, 182, 212, 0.12); border: 1px solid rgba(6, 182, 212, 0.4); display: flex; align-items: center; justify-content: center; color: var(--neon-cyan); font-size: 1.2rem;">
+            <i class="fas fa-envelope-open-text"></i>
+          </div>
+          <h3 style="font-size: 1.15rem; color: var(--text-main); font-weight: 700;">Password Recovery & OTP</h3>
+          <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.25rem;">
+            Verify your identity with an email One-Time Password to reset your credentials.
           </p>
         </div>
 
-        <div class="form-group">
-          <label class="form-label" for="forgot-identifier">
-            <span>User ID / Email / Phone Number<span class="req-star">*</span></span>
-          </label>
-          <div class="input-wrapper">
-            <i class="fas fa-user-shield input-icon"></i>
-            <input type="text" id="forgot-identifier" class="auth-input" placeholder="Enter registered User ID, Email, or Phone Number" required />
+        <!-- STEP 1: Enter User ID / Email to receive OTP -->
+        <form id="forgot-step-1" onsubmit="handleSendOtp(event)">
+          <div class="form-group">
+            <label class="form-label" for="forgot-identifier">
+              <span>User ID / Email / Phone Number<span class="req-star">*</span></span>
+            </label>
+            <div class="input-wrapper">
+              <i class="fas fa-user-shield input-icon"></i>
+              <input type="text" id="forgot-identifier" class="auth-input" placeholder="Enter User ID, Email, or Phone Number" required />
+            </div>
           </div>
-        </div>
 
-        <div class="form-group">
-          <label class="form-label" for="forgot-new-pwd">
-            <span>New Password (Min. 6 Chars)<span class="req-star">*</span></span>
-          </label>
-          <div class="input-wrapper">
-            <i class="fas fa-lock input-icon"></i>
-            <input type="password" id="forgot-new-pwd" class="auth-input" placeholder="Enter new password" required autocomplete="new-password" />
-            <button type="button" class="toggle-pwd-btn" onclick="togglePasswordVisibility('forgot-new-pwd', this)">
-              <i class="fas fa-eye"></i>
+          <button type="submit" id="btn-send-otp" class="btn-submit" style="background: linear-gradient(135deg, #06b6d4, #0284c7);">
+            <i class="fas fa-paper-plane"></i> Send OTP to Registered Email
+          </button>
+        </form>
+
+        <!-- STEP 2: Enter 6-Digit OTP and New Password -->
+        <form id="forgot-step-2" style="display: none;" onsubmit="handleVerifyOtpAndReset(event)">
+          <div style="background: rgba(6, 182, 212, 0.1); border: 1px solid rgba(6, 182, 212, 0.35); border-radius: var(--radius-sm); padding: 0.75rem 1rem; margin-bottom: 1.1rem; font-size: 0.82rem; color: #a5f3fc; display: flex; align-items: center; gap: 0.6rem;">
+            <i class="fas fa-circle-check" style="color: var(--neon-cyan); font-size: 1.1rem;"></i>
+            <div>
+              <div>6-Digit OTP code dispatched!</div>
+              <div style="font-size: 0.75rem; color: #bae6fd;" id="otp-sent-target">Check your email inbox</div>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="forgot-otp-code">
+              <span>6-Digit Verification Code (OTP)<span class="req-star">*</span></span>
+              <span id="otp-countdown" style="font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; color: var(--neon-amber);">10:00</span>
+            </label>
+            <div class="input-wrapper">
+              <i class="fas fa-shield-halved input-icon"></i>
+              <input type="text" id="forgot-otp-code" class="auth-input" placeholder="• • • • • •" maxlength="6" pattern="[0-9]{6}" required style="letter-spacing: 0.35em; font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 1.1rem; text-align: center; padding-left: 2.7rem;" />
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="forgot-new-pwd">
+              <span>New Password (Min. 6 Chars)<span class="req-star">*</span></span>
+            </label>
+            <div class="input-wrapper">
+              <i class="fas fa-lock input-icon"></i>
+              <input type="password" id="forgot-new-pwd" class="auth-input" placeholder="Enter new password" required autocomplete="new-password" />
+              <button type="button" class="toggle-pwd-btn" onclick="togglePasswordVisibility('forgot-new-pwd', this)">
+                <i class="fas fa-eye"></i>
+              </button>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="forgot-confirm-pwd">
+              <span>Confirm New Password<span class="req-star">*</span></span>
+            </label>
+            <div class="input-wrapper">
+              <i class="fas fa-check-double input-icon"></i>
+              <input type="password" id="forgot-confirm-pwd" class="auth-input" placeholder="Confirm new password" required autocomplete="new-password" />
+              <button type="button" class="toggle-pwd-btn" onclick="togglePasswordVisibility('forgot-confirm-pwd', this)">
+                <i class="fas fa-eye"></i>
+              </button>
+            </div>
+          </div>
+
+          <button type="submit" id="btn-verify-otp-submit" class="btn-submit">
+            <i class="fas fa-key"></i> Verify OTP & Update Password
+          </button>
+
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.85rem; font-size: 0.8rem;">
+            <button type="button" class="link-forgot" onclick="resendOtpCode()">
+              <i class="fas fa-rotate-right"></i> Resend OTP Code
+            </button>
+            <button type="button" class="link-forgot" style="color: var(--text-muted);" onclick="backToOtpStep1()">
+              Change User ID
             </button>
           </div>
-        </div>
-
-        <div class="form-group">
-          <label class="form-label" for="forgot-confirm-pwd">
-            <span>Confirm New Password<span class="req-star">*</span></span>
-          </label>
-          <div class="input-wrapper">
-            <i class="fas fa-check-double input-icon"></i>
-            <input type="password" id="forgot-confirm-pwd" class="auth-input" placeholder="Confirm new password" required autocomplete="new-password" />
-            <button type="button" class="toggle-pwd-btn" onclick="togglePasswordVisibility('forgot-confirm-pwd', this)">
-              <i class="fas fa-eye"></i>
-            </button>
-          </div>
-        </div>
-
-        <button type="submit" id="btn-forgot-submit" class="btn-submit">
-          <i class="fas fa-key"></i> Update Database Password
-        </button>
+        </form>
 
         <button type="button" class="btn-back-link" onclick="switchTab('login')">
           <i class="fas fa-arrow-left"></i> Back to Log In
         </button>
-      </form>
+      </div>
 
     </div>
 
@@ -1106,18 +1147,117 @@
       }
     }
 
-    // ================= HANDLE FORGOT PASSWORD =================
-    async function handleForgotPassword(e) {
-      e.preventDefault();
+    // ================= EMAIL OTP PASSWORD RESET FLOW =================
+    let currentOtpIdentifier = '';
+    let otpCountdownInterval = null;
+
+    function startOtpTimer(durationSeconds = 600) {
+      clearInterval(otpCountdownInterval);
+      let remaining = durationSeconds;
+      const display = document.getElementById('otp-countdown');
+
+      const updateDisplay = () => {
+        const mins = Math.floor(remaining / 60);
+        const secs = remaining % 60;
+        if (display) {
+          display.textContent = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+          if (remaining <= 60) {
+            display.style.color = 'var(--neon-rose)';
+          } else {
+            display.style.color = 'var(--neon-amber)';
+          }
+        }
+        if (remaining <= 0) {
+          clearInterval(otpCountdownInterval);
+          if (display) display.textContent = 'EXPIRED';
+        }
+        remaining--;
+      };
+
+      updateDisplay();
+      otpCountdownInterval = setInterval(updateDisplay, 1000);
+    }
+
+    function backToOtpStep1() {
+      clearInterval(otpCountdownInterval);
+      document.getElementById('forgot-step-1').style.display = 'block';
+      document.getElementById('forgot-step-2').style.display = 'none';
+      hideAlert();
+    }
+
+    // Step 1: Send OTP to Email
+    async function handleSendOtp(e) {
+      if (e) e.preventDefault();
       hideAlert();
 
       const identifier = document.getElementById('forgot-identifier').value.trim();
-      const newPwd = document.getElementById('forgot-new-pwd').value;
-      const confirmPwd = document.getElementById('forgot-confirm-pwd').value;
-      const btn = document.getElementById('btn-forgot-submit');
+      const btn = document.getElementById('btn-send-otp');
 
       if (!identifier) {
         showAlert('Please provide your User ID, Email, or Phone Number.', true);
+        return;
+      }
+
+      currentOtpIdentifier = identifier;
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Dispatching OTP to Email...';
+
+      try {
+        const res = await fetch('/api/auth/request-otp', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ identifier: identifier })
+        });
+
+        const data = await res.json();
+        if (data.success) {
+          showAlert(data.message || 'OTP successfully sent to your registered mail!', false);
+          document.getElementById('otp-sent-target').textContent = `Dispatched to ${data.email_masked || 'your registered email'}`;
+          
+          // Switch to Step 2
+          document.getElementById('forgot-step-1').style.display = 'none';
+          document.getElementById('forgot-step-2').style.display = 'block';
+          
+          startOtpTimer(data.expires_in_seconds || 600);
+          const otpInput = document.getElementById('forgot-otp-code');
+          if (otpInput) {
+            otpInput.value = '';
+            otpInput.focus();
+          }
+        } else {
+          showAlert(data.message || 'Candidate not found. Please check your User ID or sign in first.', true);
+        }
+      } catch (err) {
+        console.error(err);
+        showAlert('Failed to connect to authentication server. Please try again.', true);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-paper-plane"></i> Send OTP to Registered Email';
+      }
+    }
+
+    // Resend OTP
+    async function resendOtpCode() {
+      if (!currentOtpIdentifier) {
+        backToOtpStep1();
+        return;
+      }
+      showAlert('Requesting a fresh 6-digit OTP code...', false);
+      await handleSendOtp(null);
+    }
+
+    // Step 2: Verify OTP and Reset Password
+    async function handleVerifyOtpAndReset(e) {
+      e.preventDefault();
+      hideAlert();
+
+      const otp = document.getElementById('forgot-otp-code').value.trim();
+      const newPwd = document.getElementById('forgot-new-pwd').value;
+      const confirmPwd = document.getElementById('forgot-confirm-pwd').value;
+      const btn = document.getElementById('btn-verify-otp-submit');
+
+      if (!otp || otp.length !== 6) {
+        showAlert('Please enter the 6-digit numeric OTP code sent to your email.', true);
         return;
       }
 
@@ -1132,35 +1272,37 @@
       }
 
       btn.disabled = true;
-      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Updating Database...';
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Verifying OTP & Updating Database...';
 
       try {
-        const res = await fetch('/api/auth/forgot-password', {
+        const res = await fetch('/api/auth/verify-reset-otp', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            identifier: identifier,
+            identifier: currentOtpIdentifier,
+            otp: otp,
             new_password: newPwd
           })
         });
 
         const data = await res.json();
         if (data.success) {
-          showAlert(data.message || 'Password updated successfully! Switching to Log In...', false);
+          clearInterval(otpCountdownInterval);
+          showAlert(data.message || 'Password reset verified! Redirecting to Log In...', false);
           setTimeout(() => {
             switchTab('login');
-            document.getElementById('login-identifier').value = identifier;
+            document.getElementById('login-identifier').value = currentOtpIdentifier;
             document.getElementById('login-password').value = newPwd;
           }, 1200);
         } else {
-          showAlert(data.message || 'User not found. Please verify your details or sign in first.', true);
+          showAlert(data.message || 'Invalid or expired OTP code. Please verify the code in your email.', true);
         }
       } catch (err) {
         console.error(err);
         showAlert('Network or server error during password reset.', true);
       } finally {
         btn.disabled = false;
-        btn.innerHTML = '<i class="fas fa-key"></i> Update Database Password';
+        btn.innerHTML = '<i class="fas fa-key"></i> Verify OTP & Update Password';
       }
     }
 
