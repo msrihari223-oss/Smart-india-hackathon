@@ -1,0 +1,30 @@
+# ==============================================================================
+# AETHERIA // AI-Driven Social Media Intelligence Framework
+# Production & Backend Dependencies
+# ==============================================================================
+
+# Core Web Framework & ASGI Server
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+websockets>=13.0
+pydantic>=2.9.0
+
+# Database Layer & PostgreSQL Driver
+SQLAlchemy>=2.0.30
+psycopg2-binary>=2.9.9
+python-dotenv>=1.0.1
+
+# Graph Intelligence & Network Topology
+networkx>=3.3
+
+# Data Analytics & Mathematical Computations
+numpy>=2.0.0
+
+# HTTP & Network Utilities
+requests>=2.32.0
+python-multipart>=0.0.12
+aiofiles>=24.1.0
+
+# Optional / Extended ML & NLP Support
+# nltk>=3.9.1
+# scikit-learn>=1.5.0

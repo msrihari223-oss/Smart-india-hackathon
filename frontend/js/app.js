@@ -1,0 +1,1416 @@
+/**
+ * Main Application Orchestrator for Social Media Analytics Framework
+ */
+
+import { ApiClient } from './api.js';
+import { chartManager } from './charts.js';
+import { NetworkGraphManager } from './network_graph.js';
+
+class App {
+  constructor() {
+    this.ws = null;
+    this.isStreamPaused = false;
+    this.currentPlatformFilter = 'all';
+    this.currentEmotionFilter = 'all';
+    this.searchQuery = '';
+    this.networkGraph = new NetworkGraphManager('network-canvas-container');
+    this.activeFeedPosts = [];
+    this.realUsers = [];
+    this.currentRealUserPlatform = 'all';
+    this.realUserSearch = '';
+    this.activeCommentPost = null;
+  }
+
+  async init() {
+    this.setupTabs();
+    this.setupEventListeners();
+    this.initCharts();
+    
+    // Initial Load
+    await this.checkDbHealth();
+    await this.loadInitialData();
+    await this.loadRealUsers();
+    this.connectWebSocket();
+
+    // Periodic Database Health Monitoring
+    setInterval(() => this.checkDbHealth(), 15000);
+  }
+
+  async checkDbHealth() {
+    const badge = document.getElementById('db-status-badge');
+    const statusText = document.getElementById('db-connection-status');
+    if (!badge || !statusText) return;
+
+    try {
+      const health = await ApiClient.getDbHealth();
+      if (health && health.status === 'connected') {
+        const count = health.tables ? health.tables.post_records : 0;
+        badge.style.borderColor = 'rgba(16, 185, 129, 0.5)';
+        badge.style.background = 'rgba(16, 185, 129, 0.12)';
+        statusText.style.color = '#34d399';
+        statusText.innerHTML = `<i class="fas fa-check-circle" style="margin-right: 4px;"></i>PostgreSQL: Connected (${count} records)`;
+      } else {
+        badge.style.borderColor = 'rgba(245, 158, 11, 0.4)';
+        badge.style.background = 'rgba(245, 158, 11, 0.1)';
+        statusText.style.color = '#fbbf24';
+        statusText.innerHTML = `<i class="fas fa-database" style="margin-right: 4px;"></i>PostgreSQL: Standby / Memory Fallback`;
+      }
+    } catch (e) {
+      statusText.innerText = 'PostgreSQL: Offline';
+    }
+  }
+
+  setupTabs() {
+    const tabs = document.querySelectorAll('.nav-tab');
+    const sections = document.querySelectorAll('.view-section');
+
+    tabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        tabs.forEach(t => t.classList.remove('active'));
+        sections.forEach(s => s.classList.remove('active'));
+
+        tab.classList.add('active');
+        const target = tab.getAttribute('data-target');
+        const targetSection = document.getElementById(target);
+        if (targetSection) {
+          targetSection.classList.add('active');
+        }
+
+        // Trigger network re-fit if switched to network tab
+        if (target === 'view-network' && this.networkGraph && this.networkGraph.network) {
+          setTimeout(() => this.networkGraph.network.fit(), 200);
+        }
+      });
+    });
+  }
+
+  initCharts() {
+    chartManager.initEmotionDonut('chart-emotion-donut');
+    chartManager.initTimelineChart('chart-sentiment-timeline');
+    chartManager.initAgeDistribution('chart-age-distribution');
+    chartManager.initInterestsRadar('chart-interests-radar');
+    chartManager.initGeoChart('chart-geo-distribution');
+  }
+
+  setupEventListeners() {
+    // Platform Filter Buttons
+    document.querySelectorAll('.platform-filter-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        document.querySelectorAll('.platform-filter-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        this.currentPlatformFilter = btn.getAttribute('data-platform');
+        this.refreshFeed();
+      });
+    });
+
+    // Stream Play/Pause Toggle
+    const btnPause = document.getElementById('btn-pause-stream');
+    if (btnPause) {
+      btnPause.addEventListener('click', () => {
+        this.isStreamPaused = !this.isStreamPaused;
+        btnPause.innerHTML = this.isStreamPaused 
+          ? '<i class="fas fa-play"></i> Resume Stream' 
+          : '<i class="fas fa-pause"></i> Pause Stream';
+        btnPause.classList.toggle('active', this.isStreamPaused);
+      });
+    }
+
+    // Stream Speed Slider
+    const speedSelect = document.getElementById('stream-speed-select');
+    if (speedSelect) {
+      speedSelect.addEventListener('change', async (e) => {
+        const speed = parseFloat(e.target.value);
+        await ApiClient.controlStreamSpeed(speed);
+      });
+    }
+
+    // Custom Deep Analyzer Form & Guardrail
+    const analyzerInput = document.getElementById('analyzer-text');
+    let toxicityDebounceTimer = null;
+
+    if (analyzerInput) {
+      // Live debounced real-time typing analysis
+      analyzerInput.addEventListener('input', (e) => {
+        clearTimeout(toxicityDebounceTimer);
+        const text = e.target.value.trim();
+        if (!text) {
+          this.updateLiveToxicityPill({ is_toxic: false, severity: 'SAFE', detected_bad_words: [], detected_bad_hashtags: [] });
+          return;
+        }
+
+        toxicityDebounceTimer = setTimeout(async () => {
+          try {
+            const tox = await ApiClient.checkToxicity({ text });
+            this.updateLiveToxicityPill(tox);
+          } catch (err) {
+            console.error('Toxicity live check failed:', err);
+          }
+        }, 220);
+      });
+    }
+
+    // Quick Test Presets
+    const setupPreset = (id, text) => {
+      const btn = document.getElementById(id);
+      if (btn && analyzerInput) {
+        btn.addEventListener('click', () => {
+          analyzerInput.value = text;
+          analyzerInput.dispatchEvent(new Event('input'));
+        });
+      }
+    };
+
+    setupPreset('preset-safe', 'The latest Autonomous Agent framework benchmark just dropped and the latency reduction is absolutely insane! 🚀 We are witnessing an unprecedented paradigm shift in AI agents. #AgenticAI #GenAI');
+    setupPreset('preset-badwords', 'This product is complete garbage and total bullshit! You fucking idiots and clowns stole our money! What a bunch of bastards! #scam #worst');
+    setupPreset('preset-hashtags', 'Boycott this company immediately! Total corruption and lies. #hateThisApp #killTheScam #boycottFake #fraudsters #trash');
+    setupPreset('preset-threat', 'I will destroy and burn your entire office down! You worthless scumbags will suffer and die! #hate #revenge');
+
+    // Toxicity Warning Modal Controls
+    const modal = document.getElementById('toxicity-warning-modal');
+    const btnCloseModal = document.getElementById('btn-close-modal');
+    const btnDismissModal = document.getElementById('btn-dismiss-modal');
+    const btnSanitize = document.getElementById('btn-sanitize-text');
+
+    if (btnCloseModal) btnCloseModal.addEventListener('click', () => this.hideToxicityWarningModal());
+    if (btnDismissModal) btnDismissModal.addEventListener('click', () => this.hideToxicityWarningModal());
+    if (modal) {
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) this.hideToxicityWarningModal();
+      });
+    }
+
+    if (btnSanitize) {
+      btnSanitize.addEventListener('click', () => {
+        // If comment modal is active, sanitize comment input and submit
+        const commentInput = document.getElementById('comment-input-text');
+        if (this.activeCommentPost && commentInput && this.lastAnalyzedToxicity) {
+          const sanitized = this.sanitizeText(
+            commentInput.value,
+            this.lastAnalyzedToxicity.detected_bad_words || [],
+            this.lastAnalyzedToxicity.detected_bad_hashtags || []
+          );
+          commentInput.value = sanitized;
+          this.hideToxicityWarningModal();
+          this.submitComment(this.activeCommentPost.id, true);
+          return;
+        }
+
+        if (this.lastAnalyzedToxicity && analyzerInput) {
+          const sanitized = this.sanitizeText(
+            analyzerInput.value,
+            this.lastAnalyzedToxicity.detected_bad_words || [],
+            this.lastAnalyzedToxicity.detected_bad_hashtags || []
+          );
+          analyzerInput.value = sanitized;
+          this.hideToxicityWarningModal();
+          analyzerInput.dispatchEvent(new Event('input'));
+        }
+      });
+    }
+
+    // ================= Post Creator with Photo/Video Media =================
+    const mediaTypeSelect = document.getElementById('creator-media-type');
+    const mediaUrlWrap = document.getElementById('creator-media-url-wrap');
+    const mediaUrlInput = document.getElementById('creator-media-url');
+    const mediaPreview = document.getElementById('creator-media-preview');
+    const mediaStatusPill = document.getElementById('creator-media-status-pill');
+    const btnTriggerUpload = document.getElementById('btn-trigger-upload');
+    const fileInput = document.getElementById('creator-file-input');
+    const btnSamplePhoto = document.getElementById('btn-sample-photo');
+    const btnSampleVideo = document.getElementById('btn-sample-video');
+    const btnSampleClear = document.getElementById('btn-sample-clear');
+    const btnBroadcast = document.getElementById('btn-broadcast-post');
+
+    const updateMediaPreview = () => {
+      if (!mediaPreview || !mediaUrlInput) return;
+      const url = mediaUrlInput.value.trim();
+      const currentType = mediaTypeSelect ? mediaTypeSelect.value : 'none';
+
+      if (currentType === 'none' || !url) {
+        mediaPreview.innerHTML = '<div style="color: var(--text-dim); font-size: 0.85rem; padding: 2rem; text-align: center;"><i class="fas fa-file-lines" style="font-size: 1.6rem; margin-bottom: 0.5rem; display: block;"></i>Text-Only Post Mode (No Media Attached)</div>';
+        if (mediaStatusPill) {
+          mediaStatusPill.className = 'kpi-badge badge-purple';
+          mediaStatusPill.innerText = 'Text Only';
+        }
+        return;
+      }
+
+      const isVideo = currentType === 'video' || url.endsWith('.mp4') || url.endsWith('.webm') || url.startsWith('data:video');
+      
+      if (isVideo) {
+        if (mediaTypeSelect) mediaTypeSelect.value = 'video';
+        if (mediaStatusPill) {
+          mediaStatusPill.className = 'kpi-badge badge-purple';
+          mediaStatusPill.innerHTML = '<i class="fas fa-video"></i> Video Stream Ready';
+        }
+        mediaPreview.innerHTML = `<video src="${url}" controls autoplay muted playsinline style="width: 100%; max-height: 280px; border-radius: 8px; object-fit: contain; background: #000;"></video>`;
+      } else {
+        if (mediaTypeSelect) mediaTypeSelect.value = 'photo';
+        if (mediaStatusPill) {
+          mediaStatusPill.className = 'kpi-badge badge-cyan';
+          mediaStatusPill.innerHTML = '<i class="fas fa-image"></i> Photo Ready';
+        }
+        mediaPreview.innerHTML = `<img src="${url}" alt="Preview" style="width: 100%; max-height: 280px; border-radius: 8px; object-fit: cover;" onerror="this.parentElement.innerHTML='<div style=\\'color:#f43f5e; font-size:0.8rem; padding:1.5rem;\\'>Invalid image URL</div>'"/>`;
+      }
+    };
+
+    if (btnTriggerUpload && fileInput) {
+      btnTriggerUpload.addEventListener('click', () => fileInput.click());
+      fileInput.addEventListener('change', (e) => {
+        const file = e.target.files && e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          const dataUrl = event.target.result;
+          if (mediaUrlInput) mediaUrlInput.value = dataUrl;
+          if (file.type.startsWith('video')) {
+            if (mediaTypeSelect) mediaTypeSelect.value = 'video';
+          } else {
+            if (mediaTypeSelect) mediaTypeSelect.value = 'photo';
+          }
+          if (mediaUrlWrap) mediaUrlWrap.style.display = 'block';
+          updateMediaPreview();
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    if (mediaTypeSelect) {
+      mediaTypeSelect.addEventListener('change', (e) => {
+        const val = e.target.value;
+        if (val === 'photo' || val === 'video') {
+          if (mediaUrlWrap) mediaUrlWrap.style.display = 'block';
+          updateMediaPreview();
+        } else {
+          if (mediaUrlInput) mediaUrlInput.value = '';
+          updateMediaPreview();
+        }
+      });
+    }
+
+    if (mediaUrlInput) {
+      mediaUrlInput.addEventListener('input', updateMediaPreview);
+      // Run once on init
+      updateMediaPreview();
+    }
+
+    if (btnSamplePhoto) {
+      btnSamplePhoto.addEventListener('click', () => {
+        if (mediaTypeSelect) mediaTypeSelect.value = 'photo';
+        if (mediaUrlWrap) mediaUrlWrap.style.display = 'block';
+        if (mediaUrlInput) {
+          mediaUrlInput.value = 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=800&q=80';
+          updateMediaPreview();
+        }
+      });
+    }
+
+    if (btnSampleVideo) {
+      btnSampleVideo.addEventListener('click', () => {
+        if (mediaTypeSelect) mediaTypeSelect.value = 'video';
+        if (mediaUrlWrap) mediaUrlWrap.style.display = 'block';
+        if (mediaUrlInput) {
+          mediaUrlInput.value = 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4';
+          updateMediaPreview();
+        }
+      });
+    }
+
+    if (btnSampleClear) {
+      btnSampleClear.addEventListener('click', () => {
+        if (mediaTypeSelect) mediaTypeSelect.value = 'none';
+        if (mediaUrlInput) mediaUrlInput.value = '';
+        updateMediaPreview();
+      });
+    }
+
+    const postTextInput = document.getElementById('creator-post-text');
+    const charCounter = document.getElementById('creator-char-counter');
+    if (postTextInput && charCounter) {
+      postTextInput.addEventListener('input', (e) => {
+        const len = e.target.value.length;
+        charCounter.innerText = `${len} / 500`;
+        charCounter.style.color = len > 450 ? '#f43f5e' : 'var(--text-dim)';
+      });
+    }
+
+    if (btnBroadcast) {
+      btnBroadcast.addEventListener('click', async () => {
+        const text = (document.getElementById('creator-post-text')?.value || '').trim();
+        const platform = document.getElementById('creator-platform')?.value || 'X';
+        let mediaType = mediaTypeSelect ? mediaTypeSelect.value : 'none';
+        let mediaUrl = mediaUrlInput ? mediaUrlInput.value.trim() : null;
+
+        if (!text && !mediaUrl) {
+          return alert('Please enter post text or attach a media link/photo/video.');
+        }
+
+        if (mediaUrl && mediaType !== 'none') {
+          if (mediaType === 'video' || mediaUrl.endsWith('.mp4') || mediaUrl.endsWith('.webm') || mediaUrl.startsWith('data:video')) {
+            mediaType = 'video';
+          } else {
+            mediaType = 'photo';
+          }
+        } else {
+          mediaType = 'none';
+          mediaUrl = null;
+        }
+
+        btnBroadcast.disabled = true;
+        btnBroadcast.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Broadcasting to Stream...';
+
+        // Retrieve logged in user info if available
+        let authorUsername = 'operator';
+        let authorName = 'Intelligence Operator';
+        let authorAvatar = null;
+        let authorRole = 'Analyst';
+
+        if (window.authController && window.authController.user) {
+          authorUsername = window.authController.user.username || 'operator';
+          authorName = window.authController.user.full_name || 'Operator';
+          authorAvatar = window.authController.user.avatar || null;
+          authorRole = window.authController.user.role || 'Analyst';
+        }
+
+        try {
+          const res = await ApiClient.createPost({
+            text: text || 'Broadcast dispatch with media payload.',
+            platform: platform,
+            media_type: mediaType,
+            media_url: mediaUrl,
+            author_username: authorUsername,
+            author_name: authorName,
+            author_avatar: authorAvatar,
+            author_role: authorRole
+          });
+
+          if (res.success && res.post) {
+            this.prependPostCard(res.post);
+            btnBroadcast.innerHTML = '<i class="fas fa-check-circle" style="color: #10b981;"></i> Broadcast Published!';
+            
+            // Auto-switch to Live Feed tab so user immediately sees their photo/video post!
+            setTimeout(() => {
+              const feedTab = document.querySelector('.nav-tab[data-target="view-feed"]');
+              if (feedTab) feedTab.click();
+              btnBroadcast.disabled = false;
+              btnBroadcast.innerHTML = '<i class="fas fa-satellite-dish"></i> Publish & Broadcast Post to Ingestion Stream';
+            }, 600);
+          }
+        } catch (err) {
+          alert('Error broadcasting post: ' + err.message);
+          btnBroadcast.disabled = false;
+          btnBroadcast.innerHTML = '<i class="fas fa-satellite-dish"></i> Publish & Broadcast Post to Ingestion Stream';
+        }
+      });
+    }
+
+    // ================= Comments Modal Listeners & Presets =================
+    const btnCloseComments = document.getElementById('btn-close-comments-modal');
+    const commentsModal = document.getElementById('comments-modal');
+    const btnSubmitComment = document.getElementById('btn-submit-comment');
+    const btnQuickBadComment = document.getElementById('btn-quick-bad-comment');
+    const btnQuickGoodComment = document.getElementById('btn-quick-good-comment');
+
+    if (btnCloseComments) btnCloseComments.addEventListener('click', () => this.closeCommentsModal());
+    if (commentsModal) {
+      commentsModal.addEventListener('click', (e) => {
+        if (e.target === commentsModal) this.closeCommentsModal();
+      });
+    }
+
+    if (btnQuickBadComment) {
+      btnQuickBadComment.addEventListener('click', () => {
+        const inp = document.getElementById('comment-input-text');
+        if (inp) inp.value = 'This is complete bullshit and garbage! You fucking idiots and clown scammers stole money! #scam';
+      });
+    }
+
+    if (btnQuickGoodComment) {
+      btnQuickGoodComment.addEventListener('click', () => {
+        const inp = document.getElementById('comment-input-text');
+        if (inp) inp.value = 'Outstanding intelligence dispatch! Clean metrics and excellent visualization. 👏';
+      });
+    }
+
+    if (btnSubmitComment) {
+      btnSubmitComment.addEventListener('click', () => {
+        if (this.activeCommentPost) {
+          this.submitComment(this.activeCommentPost.id);
+        }
+      });
+    }
+
+
+
+    const btnAnalyze = document.getElementById('btn-run-analyzer');
+    if (btnAnalyze) {
+      btnAnalyze.addEventListener('click', async () => {
+        const text = document.getElementById('analyzer-text').value.trim();
+        const bio = document.getElementById('analyzer-bio').value.trim();
+        const loc = document.getElementById('analyzer-loc').value.trim();
+
+        if (!text) return alert('Please enter post text to analyze');
+
+        btnAnalyze.disabled = true;
+        btnAnalyze.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Running Guardrails & AI NLP...';
+
+        try {
+          const res = await ApiClient.analyzeCustomPost({ text, user_bio: bio, location: loc });
+          this.lastAnalyzedToxicity = res.toxicity || {};
+          
+          // If toxic elements detected, immediately trigger pop-up alert warning!
+          if (res.toxicity && res.toxicity.is_toxic) {
+            this.showToxicityWarningModal(res.toxicity, text);
+          }
+
+          this.renderAnalyzerResults(res);
+        } catch (err) {
+          alert('Error analyzing custom post: ' + err.message);
+        } finally {
+          btnAnalyze.disabled = false;
+          btnAnalyze.innerHTML = '<i class="fas fa-bolt"></i> Run AI Inference Pipeline';
+        }
+      });
+    }
+
+
+    // Cascade Simulator Trigger
+    const btnSimCascade = document.getElementById('btn-run-cascade');
+    if (btnSimCascade) {
+      btnSimCascade.addEventListener('click', async () => {
+        const seed = document.getElementById('cascade-seed-select').value;
+        btnSimCascade.disabled = true;
+        btnSimCascade.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Simulating Cascade...';
+        
+        try {
+          const cascadeData = await ApiClient.getCascade(seed, 4);
+          this.renderCascadeLog(cascadeData);
+          await this.networkGraph.animateCascade(cascadeData);
+        } catch (err) {
+          console.error(err);
+        } finally {
+          btnSimCascade.disabled = false;
+          btnSimCascade.innerHTML = '<i class="fas fa-play"></i> Simulate Information Cascade';
+        }
+      });
+    }
+
+    // Network Layout View Mode Controls
+    const btnNetForce = document.getElementById('btn-network-force');
+    const btnNetTree = document.getElementById('btn-network-tree');
+    const btnNetReset = document.getElementById('btn-network-reset');
+
+    if (btnNetForce) {
+      btnNetForce.addEventListener('click', () => {
+        if (btnNetTree) btnNetTree.classList.remove('active', 'border-cyan');
+        btnNetForce.classList.add('active');
+        btnNetForce.style.borderColor = 'var(--neon-cyan)';
+        btnNetForce.style.color = 'var(--neon-cyan)';
+        if (btnNetTree) {
+          btnNetTree.style.borderColor = '';
+          btnNetTree.style.color = '';
+        }
+        this.networkGraph.setPhysicsMode('force');
+      });
+    }
+
+    if (btnNetTree) {
+      btnNetTree.addEventListener('click', () => {
+        if (btnNetForce) btnNetForce.classList.remove('active');
+        btnNetTree.classList.add('active');
+        btnNetTree.style.borderColor = 'var(--neon-purple)';
+        btnNetTree.style.color = 'var(--neon-purple)';
+        if (btnNetForce) {
+          btnNetForce.style.borderColor = '';
+          btnNetForce.style.color = '';
+        }
+        this.networkGraph.setPhysicsMode('hierarchical');
+      });
+    }
+
+    if (btnNetReset) {
+      btnNetReset.addEventListener('click', () => {
+        this.networkGraph.resetFocus();
+        if (this.networkGraph.network) {
+          this.networkGraph.network.fit({
+            animation: { duration: 600, easingFunction: 'easeInOutQuad' }
+          });
+        }
+      });
+    }
+
+    // Real User Filter Buttons
+    document.querySelectorAll('.real-user-filter-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        document.querySelectorAll('.real-user-filter-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        this.currentRealUserPlatform = btn.getAttribute('data-platform');
+        this.filterAndRenderRealUsers();
+      });
+    });
+
+    // Real User Search Input
+    const searchRealUsersInput = document.getElementById('search-real-users');
+    if (searchRealUsersInput) {
+      searchRealUsersInput.addEventListener('input', (e) => {
+        this.realUserSearch = e.target.value.trim().toLowerCase();
+        this.filterAndRenderRealUsers();
+      });
+    }
+
+    // Trigger Real Live Crawl Button
+    const btnCollectReal = document.getElementById('btn-collect-real-now');
+    if (btnCollectReal) {
+      btnCollectReal.addEventListener('click', async () => {
+        btnCollectReal.disabled = true;
+        btnCollectReal.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Crawling Live Feeds...';
+        try {
+          const res = await ApiClient.triggerRealCollection();
+          await this.loadRealUsers();
+          // Flash success
+          btnCollectReal.innerHTML = `<i class="fas fa-check"></i> Ingested ${res.collected_posts_count || 15} Posts`;
+          setTimeout(() => {
+            btnCollectReal.disabled = false;
+            btnCollectReal.innerHTML = '<i class="fas fa-satellite-dish"></i> Collect Live Real Data';
+          }, 2000);
+        } catch (err) {
+          alert('Error collecting real data: ' + err.message);
+          btnCollectReal.disabled = false;
+          btnCollectReal.innerHTML = '<i class="fas fa-satellite-dish"></i> Collect Live Real Data';
+        }
+      });
+    }
+
+    // Export Real Users Buttons
+    const btnExportCsv = document.getElementById('btn-export-users-csv');
+    if (btnExportCsv) {
+      btnExportCsv.addEventListener('click', () => ApiClient.exportRealUsers('csv'));
+    }
+
+    const btnExportJson = document.getElementById('btn-export-users-json');
+    if (btnExportJson) {
+      btnExportJson.addEventListener('click', () => ApiClient.exportRealUsers('json'));
+    }
+
+    // Global Node Selection Callback from Network Graph
+    window.onNodeSelected = (node) => {
+      const select = document.getElementById('cascade-seed-select');
+      if (select) select.value = node.id;
+    };
+  }
+
+  async loadInitialData() {
+    try {
+      const [kpis, feed, timeline, demo, trends, network] = await Promise.all([
+        ApiClient.getKPIs(),
+        ApiClient.getFeed(30),
+        ApiClient.getTimeline(15),
+        ApiClient.getDemographics(),
+        ApiClient.getTrends(),
+        ApiClient.getNetwork()
+      ]);
+
+      this.updateKPIs(kpis);
+      this.renderFeed(feed);
+      this.activeFeedPosts = feed;
+      
+      chartManager.updateTimelineChart(timeline);
+      chartManager.updateAgeDistribution(demo.age_brackets);
+      chartManager.updateInterestsRadar(demo.interests);
+      chartManager.updateGeoChart(demo.geographic_distribution);
+      
+      this.renderTrends(trends);
+      this.renderNetwork(network);
+      this.populateCascadeSeedSelect(network.kols);
+
+    } catch (e) {
+      console.error('Failed to load initial data:', e);
+    }
+  }
+
+  connectWebSocket() {
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${wsProtocol}//${window.location.host}/ws/stream`;
+    
+    this.ws = new WebSocket(wsUrl);
+
+    this.ws.onopen = () => {
+      const statusEl = document.getElementById('stream-connection-status');
+      if (statusEl) statusEl.innerText = 'Live Feed Connected';
+    };
+
+    this.ws.onmessage = (event) => {
+      if (this.isStreamPaused) return;
+
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === 'LIVE_POST') {
+          this.handleLivePost(data.post, data.kpis, data.trends);
+        }
+      } catch (err) {
+        console.error('WebSocket payload error:', err);
+      }
+    };
+
+    this.ws.onclose = () => {
+      const statusEl = document.getElementById('stream-connection-status');
+      if (statusEl) statusEl.innerText = 'Reconnecting...';
+      setTimeout(() => this.connectWebSocket(), 3000);
+    };
+  }
+
+  handleLivePost(post, kpis, trends) {
+    if (kpis) this.updateKPIs(kpis);
+    if (trends) this.renderTrends(trends);
+
+    // Add post to active feed if matching filter
+    this.activeFeedPosts.unshift(post);
+    if (this.activeFeedPosts.length > 50) this.activeFeedPosts.pop();
+
+    if (this.matchesCurrentFilters(post)) {
+      this.prependPostCard(post);
+    }
+
+    // Update emotion donut live
+    if (post.sentiment && post.sentiment.emotion_scores) {
+      chartManager.updateEmotionDonut(post.sentiment.emotion_scores);
+    }
+  }
+
+  matchesCurrentFilters(post) {
+    if (this.currentPlatformFilter !== 'all' && post.platform.toLowerCase() !== this.currentPlatformFilter.toLowerCase()) {
+      return false;
+    }
+    return true;
+  }
+
+  updateKPIs(kpis) {
+    if (!kpis) return;
+    const setVal = (id, val) => {
+      const el = document.getElementById(id);
+      if (el) el.innerText = val;
+    };
+
+    setVal('kpi-total-posts', (kpis.total_posts || 0).toLocaleString());
+    setVal('kpi-sentiment-index', (kpis.overall_sentiment_index > 0 ? '+' : '') + (kpis.overall_sentiment_index || 0));
+    setVal('kpi-sarcasm-count', (kpis.sarcasm_detected_count || 0).toLocaleString());
+    setVal('kpi-velocity', `${kpis.velocity_per_minute || 24}/m`);
+  }
+
+  renderFeed(posts) {
+    const list = document.getElementById('live-stream-feed');
+    if (!list) return;
+    list.innerHTML = '';
+    posts.forEach(p => list.appendChild(this.createPostElement(p)));
+  }
+
+  prependPostCard(post) {
+    const list = document.getElementById('live-stream-feed');
+    if (!list) return;
+    const card = this.createPostElement(post);
+    list.insertBefore(card, list.firstChild);
+
+    // Keep max 40 in DOM
+    if (list.children.length > 40) {
+      list.removeChild(list.lastChild);
+    }
+  }
+
+  createPostElement(post) {
+    const card = document.createElement('div');
+    card.className = 'post-card';
+    
+    const sent = post.sentiment || {};
+    const sarcasm = sent.sarcasm || {};
+    const demo = post.demographics || {};
+    const author = post.author || { name: 'User', username: 'user', role: 'Citizen' };
+    const platformClass = `tag-${post.platform.toLowerCase()}`;
+    const profileUrl = author.profile_url || (author.username ? `https://${post.platform.toLowerCase()}.com/${author.username}` : '#');
+
+    // Stance color
+    const stance = sent.stance || { label: 'Neutral', score: 0 };
+    const stanceColor = stance.score > 0.2 ? '#10b981' : (stance.score < -0.2 ? '#f43f5e' : '#a855f7');
+
+    card.innerHTML = `
+      <div class="post-card-header">
+        <div class="post-author">
+          <img class="author-avatar" src="${author.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${author.username}`}" alt="${author.name}"/>
+          <div>
+            <div class="author-name">
+              <a href="${profileUrl}" target="_blank" style="color: #fff; text-decoration: none; display: inline-flex; align-items: center; gap: 4px;">
+                ${author.name}
+                <i class="fas fa-arrow-up-right-from-square" style="font-size: 0.68rem; color: var(--text-muted);"></i>
+              </a>
+              <span class="author-handle">@${author.username}</span>
+            </div>
+            <div style="font-size: 0.72rem; color: var(--text-muted);">${author.role || 'Live Contributor'} • ${demo.geographic_origin || author.location || 'Global'}</div>
+          </div>
+        </div>
+        <div style="display:flex; align-items:center; gap: 0.4rem;">
+          <span class="post-platform-tag ${platformClass}"><i class="fas fa-hashtag"></i> ${post.platform}</span>
+          <span class="kpi-badge badge-emerald" style="font-size: 0.68rem; padding: 0.15rem 0.45rem;"><i class="fas fa-check-circle"></i> Real Live User</span>
+          <span style="font-size: 0.72rem; color: var(--text-muted); font-family: var(--font-mono);">${post.timestamp_iso || 'Just now'}</span>
+        </div>
+      </div>
+      <div class="post-body">${post.text}</div>
+      ${post.media_url ? `
+        <div class="post-media-container" style="margin: 0.75rem 0; border-radius: 10px; overflow: hidden; border: 1px solid var(--border-subtle); max-height: 320px; background: #000;">
+          ${(post.media_type === 'video' || post.media_url.endsWith('.mp4') || post.media_url.endsWith('.webm')) ? `
+            <video src="${post.media_url}" controls preload="metadata" style="width: 100%; max-height: 300px; display: block; object-fit: contain;"></video>
+          ` : `
+            <img src="${post.media_url}" alt="Post Media Attachment" style="width: 100%; max-height: 300px; object-fit: cover; display: block;" onerror="this.parentElement.style.display='none'" />
+          `}
+        </div>
+      ` : ''}
+      <div class="post-intel-badges">
+        <span class="intel-badge" style="color: ${sent.valence > 0.1 ? '#10b981' : (sent.valence < -0.1 ? '#f43f5e' : '#94a3b8')};">
+          <i class="fas fa-heart"></i> ${sent.sentiment_label || 'Neutral'} (${sent.valence || 0})
+        </span>
+        <span class="intel-badge" style="color: #00f0ff;">
+          <i class="fas fa-brain"></i> Emotion: ${sent.primary_emotion || 'Neutral'}
+        </span>
+        ${sarcasm.is_sarcastic ? `
+          <span class="intel-badge intel-sarcasm">
+            <i class="fas fa-mask"></i> Sarcasm Detected (${Math.round(sarcasm.confidence * 100)}%)
+          </span>
+        ` : ''}
+        <span class="intel-badge intel-stance" style="color: ${stanceColor};">
+          <i class="fas fa-balance-scale"></i> Stance: ${stance.label}
+        </span>
+        <span class="intel-badge intel-demo">
+          <i class="fas fa-user-tag"></i> Age: ${demo.inferred_age_bracket || '25-34'} | ${demo.primary_interest || 'Tech'}
+        </span>
+      </div>
+      <div class="post-footer">
+        <div class="post-metrics">
+          <button class="post-metric-btn" onclick="this.classList.toggle('active')"><i class="far fa-heart"></i> ${post.engagement?.likes || 1}</button>
+          <button class="post-metric-btn"><i class="fas fa-retweet"></i> ${post.engagement?.shares || 0}</button>
+          <button class="post-metric-btn btn-comments-action" style="cursor: pointer; background: rgba(99, 102, 241, 0.15); border-color: rgba(99, 102, 241, 0.4); color: var(--primary-light);">
+            <i class="far fa-comment-dots"></i> Comments (<span id="post-cmt-count-${post.id}">${post.comments_count || 0}</span>)
+          </button>
+        </div>
+        <div>
+          ${post.target_user ? `<span style="color: var(--neon-purple); font-size: 0.72rem;">⮑ ${post.interaction_type} @${post.target_user}</span>` : ''}
+        </div>
+      </div>
+    `;
+
+    // Bind comments trigger
+    const commentBtn = card.querySelector('.btn-comments-action');
+    if (commentBtn) {
+      commentBtn.addEventListener('click', () => this.openCommentsModal(post));
+    }
+
+    return card;
+  }
+
+  async openCommentsModal(post) {
+    this.activeCommentPost = post;
+    const modal = document.getElementById('comments-modal');
+    const titleEl = document.getElementById('comments-modal-post-title');
+    const authorEl = document.getElementById('comments-modal-post-author');
+    const snippetEl = document.getElementById('comments-modal-post-snippet');
+    const inputEl = document.getElementById('comment-input-text');
+
+    if (!modal) return;
+
+    if (titleEl) titleEl.innerText = `Discussion on ${post.platform} Post`;
+    if (authorEl) authorEl.innerText = `Author: @${post.author?.username || 'user'} (${post.author?.name || 'User'})`;
+    
+    if (snippetEl) {
+      snippetEl.innerHTML = `
+        <div style="font-weight: 600; margin-bottom: 4px;">${post.text}</div>
+        ${post.media_url ? `<div style="font-size: 0.75rem; color: var(--neon-cyan);"><i class="fas fa-paperclip"></i> Media Attached (${post.media_type || 'Media'})</div>` : ''}
+      `;
+    }
+
+    if (inputEl) inputEl.value = '';
+
+    modal.style.display = 'flex';
+    await this.loadComments(post.id);
+  }
+
+  closeCommentsModal() {
+    const modal = document.getElementById('comments-modal');
+    if (modal) modal.style.display = 'none';
+    this.activeCommentPost = null;
+  }
+
+  async loadComments(postId) {
+    const container = document.getElementById('comments-list-container');
+    if (!container) return;
+    container.innerHTML = '<div style="font-size: 0.78rem; color: var(--text-muted); text-align: center; padding: 1rem;"><i class="fas fa-spinner fa-spin"></i> Loading comments...</div>';
+
+    try {
+      const res = await ApiClient.getComments(postId);
+      const comments = res.comments || [];
+      if (comments.length === 0) {
+        container.innerHTML = `
+          <div style="font-size: 0.8rem; color: var(--text-muted); text-align: center; padding: 1.5rem 1rem; border: 1px dashed var(--border-subtle); border-radius: 8px;">
+            <i class="far fa-comments" style="font-size: 1.5rem; color: var(--neon-cyan); margin-bottom: 0.5rem; display: block;"></i>
+            No comments yet. Be the first to add an audience reaction!
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = comments.map(c => {
+        const isToxic = c.is_toxic;
+        const sentColor = c.sentiment_score > 0.1 ? '#10b981' : (c.sentiment_score < -0.1 ? '#f43f5e' : '#94a3b8');
+        return `
+          <div class="comment-item" style="background: rgba(14, 18, 27, 0.9); border: 1px solid ${isToxic ? 'rgba(244, 63, 94, 0.5)' : 'var(--border-subtle)'}; border-radius: 8px; padding: 0.65rem 0.85rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
+              <div style="display: flex; align-items: center; gap: 0.45rem;">
+                <img src="${c.author_avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${c.author_username}`}" alt="${c.author_name}" style="width: 20px; height: 20px; border-radius: 50%;" />
+                <span style="font-size: 0.78rem; font-weight: 700; color: #fff;">${c.author_name || c.author_username}</span>
+                <span style="font-size: 0.68rem; color: var(--text-muted); font-family: var(--font-mono);">@${c.author_username}</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 0.35rem;">
+                <span style="font-size: 0.68rem; color: ${sentColor};"><i class="fas fa-heart"></i> ${c.sentiment_label}</span>
+                ${isToxic ? '<span class="chip-badword" style="font-size: 0.62rem; padding: 1px 5px;"><i class="fas fa-exclamation-triangle"></i> Flagged Warning</span>' : ''}
+                <span style="font-size: 0.68rem; color: var(--text-muted); font-family: var(--font-mono);">${c.timestamp_iso || 'Now'}</span>
+              </div>
+            </div>
+            <div style="font-size: 0.8rem; color: ${isToxic ? '#fda4af' : 'var(--text-main)'}; line-height: 1.4;">${c.text}</div>
+          </div>
+        `;
+      }).join('');
+    } catch (err) {
+      container.innerHTML = `<div style="color: #f43f5e; font-size: 0.78rem;">Error loading comments: ${err.message}</div>`;
+    }
+  }
+
+  async submitComment(postId, forcePublish = false) {
+    const inputEl = document.getElementById('comment-input-text');
+    if (!inputEl) return;
+    const text = inputEl.value.trim();
+    if (!text) return alert('Please enter comment text.');
+
+    let authorUsername = 'operator';
+    let authorName = 'Intelligence Operator';
+    let authorAvatar = null;
+    let authorRole = 'Analyst';
+
+    if (window.authController && window.authController.user) {
+      authorUsername = window.authController.user.username || 'operator';
+      authorName = window.authController.user.full_name || 'Operator';
+      authorAvatar = window.authController.user.avatar || null;
+      authorRole = window.authController.user.role || 'Analyst';
+    }
+
+    const btn = document.getElementById('btn-submit-comment');
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Checking & Posting...';
+    }
+
+    try {
+      const res = await ApiClient.addComment(postId, {
+        text: text,
+        author_username: authorUsername,
+        author_name: authorName,
+        author_avatar: authorAvatar,
+        author_role: authorRole,
+        force_publish: forcePublish
+      });
+
+      if (res.warning_required && res.toxicity) {
+        // AI Anti-Toxicity Moderation Intercepted Bad Language!
+        this.lastAnalyzedToxicity = res.toxicity;
+        this.showToxicityWarningModal(res.toxicity, text, true);
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = '<i class="fas fa-comment-dots"></i> Post Comment';
+        }
+        return;
+      }
+
+      if (res.success && res.comment) {
+        inputEl.value = '';
+        await this.loadComments(postId);
+        
+        // Update badge on post card
+        const countBadge = document.getElementById(`post-cmt-count-${postId}`);
+        if (countBadge) {
+          const cur = parseInt(countBadge.innerText || '0', 10);
+          countBadge.innerText = cur + 1;
+        }
+      }
+    } catch (err) {
+      alert('Error submitting comment: ' + err.message);
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-comment-dots"></i> Post Comment';
+      }
+    }
+  }
+
+  renderTrends(trends) {
+    const tbody = document.getElementById('trends-table-body');
+    if (!tbody || !trends) return;
+    tbody.innerHTML = '';
+
+    trends.forEach((t, i) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td style="font-family: var(--font-mono); font-weight: bold; color: var(--text-muted);">${i + 1}</td>
+        <td>
+          <span class="trend-topic-name">${t.topic}</span>
+          <div style="font-size: 0.7rem; color: var(--text-muted);">${t.platforms.join(' • ')}</div>
+        </td>
+        <td>
+          <div class="virality-bar-bg">
+            <div class="virality-bar-fill" style="width: ${t.virality_score}%;"></div>
+          </div>
+          <span style="font-family: var(--font-mono); font-weight: bold; color: var(--neon-cyan);">${t.virality_score}</span>
+        </td>
+        <td style="font-family: var(--font-mono); color: ${t.velocity > 0 ? '#10b981' : '#f43f5e'};">
+          ${t.velocity > 0 ? '+' : ''}${t.velocity}%
+        </td>
+        <td><span class="kpi-badge badge-purple">${t.status}</span></td>
+        <td>
+          <span style="color: ${t.avg_sentiment > 0.1 ? '#10b981' : (t.avg_sentiment < -0.1 ? '#f43f5e' : '#94a3b8')}; font-weight: 600;">
+            ${t.sentiment_label} (${t.avg_sentiment})
+          </span>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+
+  renderNetwork(network) {
+    if (!network) return;
+    this.networkGraph.render(network);
+    
+    // Render KOLs list
+    const kolList = document.getElementById('kols-ranking-list');
+    if (!kolList) return;
+    kolList.innerHTML = '';
+
+    (network.kols || []).forEach((kol, idx) => {
+      const item = document.createElement('div');
+      item.className = 'kol-item';
+      item.onclick = () => this.networkGraph.highlightKOL(kol.id);
+
+      item.innerHTML = `
+        <div class="kol-meta">
+          <div class="kol-rank">#${idx + 1}</div>
+          <img class="author-avatar" src="${kol.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${kol.id}`}" alt="${kol.name}"/>
+          <div>
+            <div style="font-size: 0.85rem; font-weight: 600; color: #fff;">${kol.name}</div>
+            <div style="font-size: 0.72rem; color: var(--text-muted);">${kol.label} • ${kol.role}</div>
+          </div>
+        </div>
+        <div style="text-align: right;">
+          <div class="kol-score">${kol.influence_score} ★</div>
+          <div style="font-size: 0.7rem; color: var(--text-muted); font-family: var(--font-mono);">${kol.followers.toLocaleString()} fllwrs</div>
+        </div>
+      `;
+      kolList.appendChild(item);
+    });
+  }
+
+  populateCascadeSeedSelect(kols) {
+    const select = document.getElementById('cascade-seed-select');
+    if (!select || !kols) return;
+    select.innerHTML = '';
+    kols.forEach(k => {
+      const opt = document.createElement('option');
+      opt.value = k.id;
+      opt.innerText = `${k.name} (@${k.id}) - ${k.influence_score} ★`;
+      select.appendChild(opt);
+    });
+  }
+
+  renderCascadeLog(cascade) {
+    const log = document.getElementById('cascade-log');
+    if (!log || !cascade) return;
+    log.innerHTML = '';
+
+    const steps = cascade.steps || [];
+    steps.forEach((s, idx) => {
+      const el = document.createElement('div');
+      el.className = 'cascade-step-item';
+      el.innerHTML = `
+        <div style="display: flex; justify-content: space-between; font-size: 0.78rem;">
+          <span style="font-weight: 700; color: var(--neon-cyan);">Step ${s.step}: Diffusion Phase</span>
+          <span style="color: var(--text-muted); font-family: var(--font-mono);">Cumulative Reach: ${s.cumulative_reach.toLocaleString()}</span>
+        </div>
+        <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 2px;">
+          Activated Nodes: ${s.activated_nodes.join(', ')}
+        </div>
+      `;
+      log.appendChild(el);
+    });
+  }
+
+  updateToxicityLiveIndicator(tox) {
+    const pill = document.getElementById('toxicity-live-indicator');
+    if (!pill || !tox) return;
+
+    if (tox.severity === 'SAFE') {
+      pill.className = 'toxicity-pill-badge pill-safe';
+      pill.innerHTML = '<i class="fas fa-shield-alt"></i> <span>Live Guardrail: Clean</span>';
+    } else if (tox.severity === 'LOW') {
+      pill.className = 'toxicity-pill-badge pill-warning';
+      pill.innerHTML = `<i class="fas fa-exclamation-triangle"></i> <span>Mild Trigger (${tox.detected_bad_words.length + tox.detected_bad_hashtags.length})</span>`;
+    } else if (tox.severity === 'MEDIUM') {
+      pill.className = 'toxicity-pill-badge pill-warning';
+      pill.innerHTML = `<i class="fas fa-exclamation-triangle"></i> <span>Flagged: Bad Words / Tags (${tox.detected_bad_words.length + tox.detected_bad_hashtags.length})</span>`;
+    } else {
+      pill.className = 'toxicity-pill-badge pill-danger';
+      pill.innerHTML = `<i class="fas fa-radiation-alt"></i> <span>Violation: ${tox.severity} Toxicity!</span>`;
+    }
+  }
+
+  showToxicityWarningModal(tox, rawText, isComment = false) {
+    const modal = document.getElementById('toxicity-warning-modal');
+    if (!modal) return;
+
+    const headingEl = modal.querySelector('.modal-heading');
+    const subheadingEl = modal.querySelector('.modal-subheading');
+    const severityBadge = document.getElementById('modal-severity-badge');
+    const percentEl = document.getElementById('modal-toxicity-percent');
+    const fillEl = document.getElementById('modal-meter-fill');
+    const wordsContainer = document.getElementById('modal-badwords-container');
+    const wordsChips = document.getElementById('modal-badwords-chips');
+    const tagsContainer = document.getElementById('modal-badtags-container');
+    const tagsChips = document.getElementById('modal-badtags-chips');
+    const catChips = document.getElementById('modal-categories-chips');
+    const actionText = document.getElementById('modal-action-text');
+    const explText = document.getElementById('modal-explanation-text');
+    const btnSanitize = document.getElementById('btn-sanitize-text');
+    const btnDismiss = document.getElementById('btn-dismiss-modal');
+
+    if (headingEl) {
+      headingEl.innerText = isComment 
+        ? '🚨 BAD COMMENT DETECTED!' 
+        : 'Toxicity & Content Guardrail Alert';
+    }
+    if (subheadingEl) {
+      subheadingEl.innerText = isComment
+        ? 'Your comment violates community safety guidelines. Offensive or abusive words were detected and blocked.'
+        : 'Our AI filter detected offensive terms, toxic hashtags, or abusive content in your submission.';
+    }
+
+    if (btnSanitize) {
+      btnSanitize.innerHTML = isComment
+        ? '<i class="fas fa-magic"></i> Auto-Sanitize & Post Comment'
+        : '<i class="fas fa-magic"></i> Auto-Sanitize Bad Words';
+    }
+
+    if (btnDismiss) {
+      btnDismiss.innerHTML = isComment
+        ? '<i class="fas fa-pencil"></i> Edit & Revise Comment'
+        : '<i class="fas fa-check"></i> I Acknowledge Warning';
+    }
+
+    const scorePct = Math.round((tox.toxicity_score || 0.6) * 100);
+
+    if (severityBadge) {
+      severityBadge.innerText = `${tox.severity || 'HIGH'} VIOLATION`;
+      severityBadge.style.color = tox.severity === 'CRITICAL' ? '#ff3366' : (tox.severity === 'HIGH' ? '#f43f5e' : '#f59e0b');
+    }
+
+    if (percentEl) percentEl.innerText = `${scorePct}%`;
+    if (fillEl) fillEl.style.width = `${Math.max(20, scorePct)}%`;
+
+    // Bad words chips
+    const words = tox.detected_bad_words || [];
+    if (wordsContainer && wordsChips) {
+      if (words.length > 0) {
+        wordsContainer.style.display = 'flex';
+        wordsChips.innerHTML = words.map(w => `<span class="chip-badword"><i class="fas fa-ban"></i> ${w}</span>`).join('');
+      } else {
+        wordsContainer.style.display = 'none';
+      }
+    }
+
+    // Bad hashtags chips
+    const tags = tox.detected_bad_hashtags || [];
+    if (tagsContainer && tagsChips) {
+      if (tags.length > 0) {
+        tagsContainer.style.display = 'flex';
+        tagsChips.innerHTML = tags.map(t => `<span class="chip-badtag"><i class="fas fa-hashtag"></i> ${t}</span>`).join('');
+      } else {
+        tagsContainer.style.display = 'none';
+      }
+    }
+
+    // Category chips
+    const cats = tox.categories || [];
+    if (catChips) {
+      if (cats.length > 0) {
+        catChips.innerHTML = cats.map(c => `<span class="chip-category"><i class="fas fa-tag"></i> ${c}</span>`).join('');
+      } else {
+        catChips.innerHTML = '<span class="chip-category">Profanity / Abusive Language</span>';
+      }
+    }
+
+    if (actionText) actionText.innerText = isComment ? 'Comment Blocked — Revise or Auto-Sanitize' : (tox.moderation_action === 'AUTO_BLOCK' ? 'Auto-Block & Flag User Profile' : 'Pop-Up Warning & Content Flagged');
+    if (explText) explText.innerText = tox.explanation || 'Offensive, profane, or abusive words were detected in your comment.';
+
+    modal.style.display = 'flex';
+  }
+
+  hideToxicityWarningModal() {
+    const modal = document.getElementById('toxicity-warning-modal');
+    if (modal) modal.style.display = 'none';
+  }
+
+  sanitizeText(text, badWords, badTags) {
+    let result = text;
+    badWords.forEach(bad => {
+      const cleanBad = bad.replace('#', '');
+      const regex = new RegExp(`\\b${cleanBad}\\b`, 'gi');
+      result = result.replace(regex, cleanBad[0] + '*'.repeat(Math.max(2, cleanBad.length - 1)));
+    });
+    badTags.forEach(tag => {
+      const regex = new RegExp(tag.replace(/([.*+?^=!:${}()|\[\]\/\\])/g, "\\$1"), 'gi');
+      result = result.replace(regex, '#[moderated_tag]');
+    });
+    return result;
+  }
+
+  renderAnalyzerResults(data) {
+    const container = document.getElementById('analyzer-results-box');
+    if (!container) return;
+    container.style.display = 'block';
+
+    const s = data.sentiment || {};
+    const d = data.demographics || {};
+    const sarcasm = s.sarcasm || {};
+    const tox = data.toxicity || s.toxicity || {};
+
+    const isToxic = tox.is_toxic;
+    const toxScorePct = Math.round((tox.toxicity_score || 0) * 100);
+
+    container.innerHTML = `
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.85rem; border-bottom: 1px solid var(--border-subtle); padding-bottom: 0.5rem;">
+        <div style="font-size: 1.05rem; font-weight: 700; color: #fff;">
+          <i class="fas fa-check-circle" style="color: var(--neon-emerald);"></i> AI Inference Output
+        </div>
+        <div>
+          ${isToxic ? `
+            <span class="toxicity-pill-badge pill-danger" style="cursor: pointer;" id="btn-reopen-tox-modal">
+              <i class="fas fa-radiation-alt"></i> ${tox.severity} VIOLATION (${toxScorePct}%)
+            </span>
+          ` : `
+            <span class="toxicity-pill-badge pill-safe">
+              <i class="fas fa-shield-alt"></i> Safe & Compliant
+            </span>
+          `}
+        </div>
+      </div>
+
+      <!-- Toxicity & Guardrail Deep Breakdown Banner if Toxic -->
+      ${isToxic ? `
+        <div style="background: rgba(244, 63, 94, 0.1); border: 1px solid rgba(244, 63, 94, 0.4); border-radius: 10px; padding: 0.85rem 1rem; margin-bottom: 1rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+            <span style="font-size: 0.8rem; font-weight: 700; color: #ff4d6d; display: flex; align-items: center; gap: 0.4rem;">
+              <i class="fas fa-exclamation-triangle"></i> Content Moderation Triggered
+            </span>
+            <span style="font-size: 0.75rem; color: var(--text-secondary);">Action: <b>${tox.moderation_action}</b></span>
+          </div>
+          <div style="font-size: 0.78rem; color: var(--text-primary); margin-bottom: 0.5rem;">
+            ${tox.explanation}
+          </div>
+          <div style="display: flex; gap: 0.4rem; flex-wrap: wrap;">
+            ${(tox.detected_bad_words || []).map(w => `<span class="chip-badword"><i class="fas fa-ban"></i> ${w}</span>`).join('')}
+            ${(tox.detected_bad_hashtags || []).map(t => `<span class="chip-badtag"><i class="fas fa-hashtag"></i> ${t}</span>`).join('')}
+          </div>
+        </div>
+      ` : ''}
+
+      <div class="radar-stat-grid">
+        <div class="radar-stat-card">
+          <div class="lbl">Primary Emotion</div>
+          <div class="val" style="color: ${isToxic ? '#f43f5e' : '#00f0ff'};">${(s.primary_emotion || 'Neutral').toUpperCase()}</div>
+        </div>
+        <div class="radar-stat-card">
+          <div class="lbl">Valence & Sentiment</div>
+          <div class="val" style="color: ${s.valence > 0.1 ? '#10b981' : (s.valence < -0.1 ? '#f43f5e' : '#94a3b8')};">
+            ${s.sentiment_label} (${s.valence})
+          </div>
+        </div>
+        <div class="radar-stat-card">
+          <div class="lbl">Sarcasm & Irony</div>
+          <div class="val" style="color: ${sarcasm.is_sarcastic ? '#f43f5e' : '#10b981'};">
+            ${sarcasm.is_sarcastic ? `YES (${Math.round(sarcasm.confidence * 100)}%)` : 'NO (0%)'}
+          </div>
+        </div>
+        <div class="radar-stat-card">
+          <div class="lbl">Toxicity Index</div>
+          <div class="val" style="color: ${isToxic ? '#f43f5e' : '#10b981'};">${toxScorePct}% (${tox.severity || 'SAFE'})</div>
+        </div>
+        <div class="radar-stat-card">
+          <div class="lbl">Inferred Age Group</div>
+          <div class="val" style="color: #38bdf8;">${d.inferred_age_bracket || '25-34'}</div>
+        </div>
+        <div class="radar-stat-card">
+          <div class="lbl">Professional Domain</div>
+          <div class="val" style="color: #f59e0b;">${d.primary_interest || 'Tech & AI'}</div>
+        </div>
+      </div>
+      <div style="margin-top: 1rem; font-size: 0.8rem; color: var(--text-secondary);">
+        <b>Inferred Persona:</b> <span class="kpi-badge badge-cyan">${d.persona_archetype || 'Audience Member'}</span> | 
+        <b>Geo Origin:</b> <span style="color:#fff;">${d.geographic_origin || 'Global'}</span> | 
+        <b>Language:</b> <span style="color:#fff;">${d.inferred_language || 'English'}</span>
+      </div>
+    `;
+
+    const reopenBtn = document.getElementById('btn-reopen-tox-modal');
+    if (reopenBtn && isToxic) {
+      reopenBtn.addEventListener('click', () => {
+        this.showToxicityWarningModal(tox, data.text || '');
+      });
+    }
+  }
+
+
+  async loadRealUsers() {
+    try {
+      const data = await ApiClient.getRealUsers('all', '', 150);
+      this.realUsers = data.users || [];
+      this.updateRealUserStats(data.stats || {});
+      this.filterAndRenderRealUsers();
+    } catch (err) {
+      console.error('Failed to load real users:', err);
+    }
+  }
+
+  updateRealUserStats(stats) {
+    const total = stats.total_real_users || this.realUsers.length;
+    const byPlat = stats.by_platform || {};
+
+    const setVal = (id, val) => {
+      const el = document.getElementById(id);
+      if (el) el.innerText = val;
+    };
+
+    setVal('stat-total-real-users', total);
+    setVal('count-pill-all', total);
+    setVal('stat-tg-users', byPlat['Telegram'] || 0);
+    setVal('stat-x-users', (byPlat['X'] || 0) + (byPlat['Bluesky'] || 0));
+    setVal('stat-ig-users', byPlat['Instagram'] || 0);
+    setVal('stat-yt-users', byPlat['YouTube'] || 0);
+    setVal('stat-reddit-users', byPlat['Reddit'] || 0);
+    setVal('stat-fb-users', byPlat['Facebook'] || 0);
+  }
+
+  filterAndRenderRealUsers() {
+    let filtered = this.realUsers;
+    if (this.currentRealUserPlatform !== 'all') {
+      filtered = filtered.filter(u => u.platform.toLowerCase() === this.currentRealUserPlatform.toLowerCase());
+    }
+    if (this.realUserSearch) {
+      const q = this.realUserSearch;
+      filtered = filtered.filter(u => 
+        (u.username && u.username.toLowerCase().includes(q)) ||
+        (u.name && u.name.toLowerCase().includes(q)) ||
+        (u.bio && u.bio.toLowerCase().includes(q)) ||
+        (u.location && u.location.toLowerCase().includes(q)) ||
+        (u.demographics?.primary_interest && u.demographics.primary_interest.toLowerCase().includes(q))
+      );
+    }
+    this.renderRealUsers(filtered);
+  }
+
+  renderRealUsers(users) {
+    const container = document.getElementById('real-users-grid-container');
+    if (!container) return;
+
+    if (!users || users.length === 0) {
+      container.innerHTML = `
+        <div style="grid-column: 1/-1; text-align: center; padding: 3rem; color: var(--text-muted);">
+          <i class="fas fa-users-slash" style="font-size: 2.5rem; margin-bottom: 1rem; color: var(--border-glow);"></i>
+          <p>No real users matched your criteria. Click "Collect Live Real Data" to fetch fresh users across Telegram, Reddit, YouTube, Facebook, X & Instagram.</p>
+        </div>
+      `;
+      return;
+    }
+
+    container.innerHTML = '';
+    users.forEach(u => {
+      const demo = u.demographics || {};
+      const platformLower = (u.platform || 'x').toLowerCase();
+      const platformClass = `tag-${platformLower}`;
+      const latestPost = (u.recent_posts && u.recent_posts.length > 0) ? u.recent_posts[0] : null;
+
+      const card = document.createElement('div');
+      card.className = 'real-user-card';
+      card.style.setProperty('--platform-color', 
+        platformLower === 'telegram' ? '#24a1de' : 
+        platformLower === 'reddit' ? '#ff4500' : 
+        platformLower === 'youtube' ? '#ff3333' : 
+        platformLower === 'facebook' ? '#1877f2' : 
+        platformLower === 'instagram' ? '#e1306c' : '#00f0ff'
+      );
+
+      card.innerHTML = `
+        <div>
+          <div class="real-user-header">
+            <img class="real-user-avatar" src="${u.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${u.username}`}" alt="${u.name}"/>
+            <div class="real-user-meta">
+              <div class="real-user-title">
+                ${u.name}
+                <i class="fas fa-circle-check" style="color: var(--neon-cyan); font-size: 0.8rem;" title="Verified Live Real User"></i>
+              </div>
+              <div class="real-user-handle">${u.username}</div>
+            </div>
+            <span class="post-platform-tag ${platformClass}"><i class="fas fa-hashtag"></i> ${u.platform}</span>
+          </div>
+
+          <div class="real-user-bio">${u.bio || 'Authentic community contributor.'}</div>
+
+          <div class="real-user-tags">
+            <span class="user-tag"><i class="fas fa-users"></i> ${(u.followers || 0).toLocaleString()} followers</span>
+            <span class="user-tag"><i class="fas fa-map-pin"></i> ${demo.geographic_origin || u.location || 'Global'}</span>
+            <span class="user-tag"><i class="fas fa-brain"></i> ${demo.inferred_age_bracket || '25-34'}</span>
+            <span class="user-tag"><i class="fas fa-briefcase"></i> ${demo.primary_interest || 'Tech'}</span>
+          </div>
+
+          ${latestPost ? `
+            <div class="real-user-post-box">
+              <div style="font-size: 0.7rem; color: var(--text-muted); margin-bottom: 3px; display: flex; justify-content: space-between;">
+                <span><i class="fas fa-comment-dots"></i> Latest Live Post:</span>
+                <span style="color: ${latestPost.valence > 0.1 ? '#10b981' : (latestPost.valence < -0.1 ? '#f43f5e' : '#94a3b8')}">${latestPost.sentiment_label} (${latestPost.valence})</span>
+              </div>
+              <div style="line-height: 1.4;">${latestPost.text}</div>
+            </div>
+          ` : ''}
+        </div>
+
+        <div class="real-user-footer">
+          <span><i class="fas fa-layer-group"></i> ${u.posts_count || 1} Collected Posts</span>
+          <a class="btn-profile-link" href="${u.profile_url || '#'}" target="_blank" rel="noopener noreferrer">
+            Open Profile <i class="fas fa-arrow-up-right-from-square"></i>
+          </a>
+        </div>
+      `;
+      container.appendChild(card);
+    });
+  }
+
+  async refreshFeed() {
+    try {
+      const serverPosts = await ApiClient.getFeed(40, this.currentPlatformFilter, this.currentEmotionFilter, this.searchQuery);
+      if (serverPosts && serverPosts.length > 0) {
+        this.renderFeed(serverPosts);
+        return;
+      }
+    } catch (e) {
+      console.warn('Fallback to active posts filter:', e);
+    }
+    const filtered = this.activeFeedPosts.filter(p => this.matchesCurrentFilters(p));
+    this.renderFeed(filtered);
+  }
+}
+
+// Initialize on DOM Ready
+document.addEventListener('DOMContentLoaded', () => {
+  const app = new App();
+  app.init();
+});
