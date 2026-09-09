@@ -274,8 +274,14 @@ def generate_live_post() -> Dict[str, Any]:
 
     return post_data
 
-# Pre-populate historical buffer with initial 60 records for instant rich charts on launch
-def seed_initial_history(count: int = 60):
+_is_history_seeded = False
+
+# Pre-populate historical buffer with initial records for instant rich charts on launch
+def seed_initial_history(count: int = 20):
+    global _is_history_seeded
+    if _is_history_seeded:
+        return
+    _is_history_seeded = True
     start_time = time.time() - (count * 10)
     for i in range(count):
         author = random.choice(INFLUENCERS_AND_USERS)
@@ -315,5 +321,6 @@ def seed_initial_history(count: int = 60):
                 timestamp=t
             )
 
-# Execute seed
-seed_initial_history(60)
+# Execute fast seed
+seed_initial_history(15)
+

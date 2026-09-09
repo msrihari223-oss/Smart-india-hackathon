@@ -17,7 +17,6 @@ class PostgresRepository:
         self.is_connected = False
         self.last_attempt_time = 0.0
         self.retry_cooldown = 30.0  # seconds between reconnect attempts when offline
-        self.init_db()
 
     def init_db(self, force: bool = False) -> bool:
         """Initializes tables in PostgreSQL schema if database is reachable"""
@@ -31,6 +30,17 @@ class PostgresRepository:
             return False
         try:
             Base.metadata.create_all(bind=engine)
+            # Ensure phone_number column exists in app_users and media_url is TEXT in post_records
+            try:
+                from sqlalchemy import text
+                with engine.connect() as conn:
+                    conn.execute(text("ALTER TABLE app_users ADD COLUMN IF NOT EXISTS phone_number VARCHAR(32) DEFAULT '';"))
+                    conn.execute(text("ALTER TABLE post_records ADD COLUMN IF NOT EXISTS media_type VARCHAR(32) DEFAULT 'none';"))
+                    conn.execute(text("ALTER TABLE post_records ADD COLUMN IF NOT EXISTS media_url TEXT;"))
+                    conn.execute(text("ALTER TABLE post_records ALTER COLUMN media_url TYPE TEXT;"))
+                    conn.commit()
+            except Exception:
+                pass
             self.is_connected = True
             return True
         except Exception:
@@ -110,39 +120,126 @@ class PostgresRepository:
         except Exception:
             return False
 
-    def sync_all_real_users(self, users_dict: Dict[str, Any]) -> int:
-        """Bulk persists all registered in-memory real users into PostgreSQL"""
+    def sync_all_real_users(self, users_dict: Dict[str, Any], batch_size: int = 1000) -> int:
+        """High-speed chunked bulk persists real users into PostgreSQL / Supabase"""
+        if not self.is_connected:
+            self.init_db()
+        if not self.is_connected or SessionLocal is None:
+            return 0
+
+        user_list = list(users_dict.values())
+        total = len(user_list)
+        saved_count = 0
+
+        try:
+            from sqlalchemy.dialects.postgresql import insert as pg_insert
+            with SessionLocal() as db:
+                for i in range(0, total, batch_size):
+                    chunk = user_list[i : i + batch_size]
+                    chunk_data = [
+                        {
+                            "id": u.get("id"),
+                            "platform": u.get("platform", "Unknown"),
+                            "username": u.get("username", ""),
+                            "name": u.get("name", ""),
+                            "bio": u.get("bio", ""),
+                            "location": u.get("location", ""),
+                            "followers": u.get("followers", 0),
+                            "avatar": u.get("avatar", ""),
+                            "profile_url": u.get("profile_url", ""),
+                            "demographics": u.get("demographics", {}),
+                            "posts_count": u.get("posts_count", 1),
+                            "sentiment_avg": u.get("sentiment_avg", 0.0),
+                            "primary_emotion": u.get("primary_emotion", "neutral"),
+                            "recent_posts": u.get("recent_posts", []),
+                            "first_seen": u.get("first_seen", time.time()),
+                            "last_active": u.get("last_active", time.time())
+                        }
+                        for u in chunk
+                    ]
+                    stmt = pg_insert(RealUserRecord).values(chunk_data)
+                    stmt = stmt.on_conflict_do_update(
+                        index_elements=[RealUserRecord.id],
+                        set_={
+                            "followers": stmt.excluded.followers,
+                            "posts_count": stmt.excluded.posts_count,
+                            "sentiment_avg": stmt.excluded.sentiment_avg,
+                            "last_active": stmt.excluded.last_active
+                        }
+                    )
+                    db.execute(stmt)
+                    db.commit()
+                    saved_count += len(chunk)
+            return saved_count
+        except Exception as e:
+            # Fallback to standard merge
+            try:
+                with SessionLocal() as db:
+                    for u in user_list[:batch_size]:
+                        rec = RealUserRecord(
+                            id=u.get("id"),
+                            platform=u.get("platform", "Unknown"),
+                            username=u.get("username", ""),
+                            name=u.get("name", ""),
+                            bio=u.get("bio", ""),
+                            location=u.get("location", ""),
+                            followers=u.get("followers", 0),
+                            avatar=u.get("avatar", ""),
+                            profile_url=u.get("profile_url", ""),
+                            demographics=u.get("demographics", {}),
+                            posts_count=u.get("posts_count", 1),
+                            sentiment_avg=u.get("sentiment_avg", 0.0),
+                            primary_emotion=u.get("primary_emotion", "neutral"),
+                            recent_posts=u.get("recent_posts", []),
+                            first_seen=u.get("first_seen", time.time()),
+                            last_active=u.get("last_active", time.time())
+                        )
+                        db.merge(rec)
+                        saved_count += 1
+                    db.commit()
+            except Exception:
+                pass
+    def sync_all_trending_topics(self, trends_list: List[Dict[str, Any]]) -> int:
+        """Persists or updates trending topics in PostgreSQL / Supabase"""
+        if not self.is_connected:
+            self.init_db()
         if not self.is_connected or SessionLocal is None:
             return 0
         saved_count = 0
+        now_epoch = time.time()
         try:
+            from sqlalchemy.dialects.postgresql import insert as pg_insert
             with SessionLocal() as db:
-                for u in users_dict.values():
-                    rec = RealUserRecord(
-                        id=u.get("id"),
-                        platform=u.get("platform", "Unknown"),
-                        username=u.get("username", ""),
-                        name=u.get("name", ""),
-                        bio=u.get("bio", ""),
-                        location=u.get("location", ""),
-                        followers=u.get("followers", 0),
-                        avatar=u.get("avatar", ""),
-                        profile_url=u.get("profile_url", ""),
-                        demographics=u.get("demographics", {}),
-                        posts_count=u.get("posts_count", 1),
-                        sentiment_avg=u.get("sentiment_avg", 0.0),
-                        primary_emotion=u.get("primary_emotion", "neutral"),
-                        recent_posts=u.get("recent_posts", []),
-                        first_seen=u.get("first_seen", time.time()),
-                        last_active=u.get("last_active", time.time())
+                for t in trends_list:
+                    topic_name = t.get("topic") or t.get("name")
+                    if not topic_name:
+                        continue
+                    stmt = pg_insert(TrendingTopicRecord).values({
+                        "topic": topic_name,
+                        "volume": t.get("volume", t.get("count", 100)),
+                        "velocity": float(t.get("velocity", 12.5)),
+                        "virality_score": float(t.get("virality_score", 85.0)),
+                        "sentiment_score": float(t.get("sentiment_score", t.get("sentiment", 0.35))),
+                        "dominant_emotion": t.get("dominant_emotion", t.get("emotion", "excitement")),
+                        "updated_at": now_epoch
+                    })
+                    stmt = stmt.on_conflict_do_update(
+                        index_elements=[TrendingTopicRecord.topic],
+                        set_={
+                            "volume": stmt.excluded.volume,
+                            "velocity": stmt.excluded.velocity,
+                            "virality_score": stmt.excluded.virality_score,
+                            "sentiment_score": stmt.excluded.sentiment_score,
+                            "dominant_emotion": stmt.excluded.dominant_emotion,
+                            "updated_at": stmt.excluded.updated_at
+                        }
                     )
-                    db.merge(rec)
+                    db.execute(stmt)
                     saved_count += 1
                 db.commit()
             return saved_count
-        except Exception:
+        except Exception as e:
             return saved_count
-
 
     def insert_post(self, post_data: Dict[str, Any]) -> bool:
         """Persists a new post record with full ML analytics into PostgreSQL"""

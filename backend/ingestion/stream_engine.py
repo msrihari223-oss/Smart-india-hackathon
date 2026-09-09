@@ -67,4 +67,18 @@ class StreamBroadcaster:
 
             await asyncio.sleep(self.stream_delay)
 
+    async def broadcast_custom_event(self, payload: dict):
+        """Broadcast custom one-off events (like user-created posts, likes, reposts) to all connected clients."""
+        if self.active_connections:
+            message_str = json.dumps(payload)
+            stale_connections = []
+            for connection in list(self.active_connections):
+                try:
+                    await connection.send_text(message_str)
+                except Exception:
+                    stale_connections.append(connection)
+            
+            for stale in stale_connections:
+                self.disconnect(stale)
+
 stream_broadcaster = StreamBroadcaster()

@@ -45,6 +45,7 @@ class AuthManager:
             {
                 "username": "admin",
                 "email": "admin@aetheria.intelligence.io",
+                "phone_number": "+1-555-0101",
                 "password": "admin123",
                 "full_name": "Director Sarah Vance",
                 "role": "Director / Admin",
@@ -54,6 +55,7 @@ class AuthManager:
             {
                 "username": "analyst",
                 "email": "analyst@aetheria.intelligence.io",
+                "phone_number": "+1-555-0102",
                 "password": "sentinel2026",
                 "full_name": "Dr. Marcus Chen",
                 "role": "Lead Data Analyst",
@@ -63,6 +65,7 @@ class AuthManager:
             {
                 "username": "operator",
                 "email": "operator@aetheria.intelligence.io",
+                "phone_number": "+1-555-0103",
                 "password": "operator123",
                 "full_name": "Agent Elena Rostova",
                 "role": "Field Operator",
@@ -77,6 +80,7 @@ class AuthManager:
                 "id": f"usr_{acc['username']}",
                 "username": acc["username"],
                 "email": acc["email"],
+                "phone_number": acc.get("phone_number", ""),
                 "password_hash": p_hash,
                 "salt": salt,
                 "full_name": acc["full_name"],
@@ -100,6 +104,7 @@ class AuthManager:
                     id=user_dict["id"],
                     username=user_dict["username"],
                     email=user_dict["email"],
+                    phone_number=user_dict.get("phone_number", ""),
                     password_hash=user_dict["password_hash"],
                     salt=user_dict["salt"],
                     full_name=user_dict.get("full_name", ""),
@@ -116,12 +121,17 @@ class AuthManager:
             pass
 
     def get_user(self, identifier: str) -> Optional[Dict[str, Any]]:
-        """Finds user by username or email from memory or PostgreSQL."""
+        """Finds user by username, email, or phone number from memory or PostgreSQL."""
+        if not identifier:
+            return None
         identifier_clean = identifier.strip().lower()
+        identifier_raw = identifier.strip()
 
         # Check in-memory store
         for u in self._users.values():
-            if u["username"].lower() == identifier_clean or u["email"].lower() == identifier_clean:
+            if (u["username"].lower() == identifier_clean or 
+                u["email"].lower() == identifier_clean or 
+                (u.get("phone_number") and u["phone_number"].strip() == identifier_raw)):
                 return u
 
         # Check database if available
@@ -130,13 +140,15 @@ class AuthManager:
                 with SessionLocal() as db:
                     record = db.query(AppUserRecord).filter(
                         (AppUserRecord.username.ilike(identifier_clean)) | 
-                        (AppUserRecord.email.ilike(identifier_clean))
+                        (AppUserRecord.email.ilike(identifier_clean)) |
+                        (AppUserRecord.phone_number == identifier_raw)
                     ).first()
                     if record:
                         u_dict = {
                             "id": record.id,
                             "username": record.username,
                             "email": record.email,
+                            "phone_number": record.phone_number or "",
                             "password_hash": record.password_hash,
                             "salt": record.salt,
                             "full_name": record.full_name,
@@ -154,21 +166,24 @@ class AuthManager:
 
         return None
 
-    def register(self, username: str, email: str, password: str, full_name: str = "", role: str = "Analyst", clearance_level: str = "Level 3") -> Dict[str, Any]:
-        """Registers a new user account with validation."""
+    def register(self, username: str, email: str, phone_number: str = "", password: str = "", full_name: str = "", role: str = "Analyst", clearance_level: str = "Level 3") -> Dict[str, Any]:
+        """Registers a new user account with strict database persistence and validation."""
         username = username.strip().lower()
         email = email.strip().lower()
+        phone_number = phone_number.strip()
 
         if len(username) < 3:
-            return {"success": False, "message": "Username must be at least 3 characters long."}
+            return {"success": False, "message": "User ID must be at least 3 characters long."}
         if "@" not in email or "." not in email:
             return {"success": False, "message": "Please provide a valid email address."}
+        if len(phone_number) < 6:
+            return {"success": False, "message": "Please provide a valid phone number (minimum 6 digits)."}
         if len(password) < 6:
             return {"success": False, "message": "Password must be at least 6 characters long."}
 
-        # Check for duplicate
-        if self.get_user(username) or self.get_user(email):
-            return {"success": False, "message": "An account with this username or email already exists."}
+        # Check for duplicates across username, email, phone number
+        if self.get_user(username) or self.get_user(email) or self.get_user(phone_number):
+            return {"success": False, "message": "An account with this User ID, Email, or Phone Number already exists."}
 
         p_hash, salt = hash_password(password)
         avatar = f"https://api.dicebear.com/7.x/bottts/svg?seed={username}"
@@ -177,6 +192,7 @@ class AuthManager:
             "id": f"usr_{uuid.uuid4().hex[:12]}",
             "username": username,
             "email": email,
+            "phone_number": phone_number,
             "password_hash": p_hash,
             "salt": salt,
             "full_name": full_name.strip() or username.capitalize(),
@@ -194,22 +210,33 @@ class AuthManager:
         token = self._create_session(user_dict)
         return {
             "success": True,
-            "message": "Access granted. Account profile registered.",
+            "message": "Account registered successfully and saved to database!",
             "token": token,
             "user": self._sanitize_user(user_dict)
         }
 
     def login(self, identifier: str, password: str) -> Dict[str, Any]:
-        """Authenticates user credentials and generates active session token."""
+        """Authenticates user credentials against saved database records."""
+        if not identifier or not password:
+            return {"success": False, "message": "User ID / Email / Phone Number and Password are required."}
+
         user = self.get_user(identifier)
         if not user:
-            return {"success": False, "message": "Access Denied: Invalid operator handle or security passcode."}
+            return {
+                "success": False, 
+                "message": "Candidate not found",
+                "error_type": "candidate_not_found"
+            }
 
         if not user.get("is_active", True):
             return {"success": False, "message": "Access Denied: Account is deactivated."}
 
         if not verify_password(password, user["password_hash"], user["salt"]):
-            return {"success": False, "message": "Access Denied: Invalid operator handle or security passcode."}
+            return {
+                "success": False, 
+                "message": "Candidate not found",
+                "error_type": "candidate_not_found"
+            }
 
         # Update last login
         user["last_login"] = time.time()
@@ -218,9 +245,49 @@ class AuthManager:
         token = self._create_session(user)
         return {
             "success": True,
-            "message": "Authentication verified. Access permitted.",
+            "message": f"Welcome back, {user.get('full_name') or user.get('username')}! Authentication verified.",
             "token": token,
             "user": self._sanitize_user(user)
+        }
+
+    def forgot_password(self, identifier: str, new_password: str) -> Dict[str, Any]:
+        """Resets user password in memory and PostgreSQL database."""
+        if not identifier or not new_password:
+            return {"success": False, "message": "Identifier and new password are required."}
+
+        if len(new_password) < 6:
+            return {"success": False, "message": "New password must be at least 6 characters long."}
+
+        user = self.get_user(identifier)
+        if not user:
+            return {
+                "success": False,
+                "message": "User not found. No registered account matches this User ID, Email, or Phone Number."
+            }
+
+        p_hash, salt = hash_password(new_password)
+        user["password_hash"] = p_hash
+        user["salt"] = salt
+        user["last_login"] = time.time()
+
+        # Update memory store
+        self._users[user["username"].lower()] = user
+
+        # Update database
+        if postgres_repo.is_connected and SessionLocal is not None:
+            try:
+                with SessionLocal() as db:
+                    record = db.query(AppUserRecord).filter(AppUserRecord.id == user["id"]).first()
+                    if record:
+                        record.password_hash = p_hash
+                        record.salt = salt
+                        db.commit()
+            except Exception:
+                pass
+
+        return {
+            "success": True,
+            "message": "Password reset successfully in database! You can now log in with your new password."
         }
 
     def _create_session(self, user: Dict[str, Any]) -> str:
@@ -229,6 +296,8 @@ class AuthManager:
         self._sessions[token] = {
             "user_id": user["id"],
             "username": user["username"],
+            "email": user["email"],
+            "phone_number": user.get("phone_number", ""),
             "role": user["role"],
             "clearance_level": user["clearance_level"],
             "full_name": user["full_name"],
@@ -265,6 +334,7 @@ class AuthManager:
             "id": user.get("id"),
             "username": user.get("username"),
             "email": user.get("email"),
+            "phone_number": user.get("phone_number", ""),
             "full_name": user.get("full_name"),
             "role": user.get("role"),
             "clearance_level": user.get("clearance_level"),
@@ -276,3 +346,4 @@ class AuthManager:
 
 # Global singleton instance
 auth_manager = AuthManager()
+

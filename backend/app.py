@@ -9,7 +9,7 @@ from contextlib import asynccontextmanager
 from typing import Optional, Dict, Any
 from pydantic import BaseModel
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -24,8 +24,21 @@ from backend.ml.network_engine import network_engine
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Initialize PostgreSQL Tables
-    postgres_repo.init_db()
+    # Non-blocking PostgreSQL initialization & sync in background thread
+    async def init_and_sync_db():
+        try:
+            await asyncio.to_thread(postgres_repo.init_db)
+            from backend.ingestion.real_connectors import real_user_manager
+            synced = await asyncio.to_thread(postgres_repo.sync_all_real_users, real_user_manager.users)
+            
+            # Auto sync real-time trending topics into PostgreSQL / Supabase
+            trends = trend_engine.get_trending_topics()
+            synced_trends = await asyncio.to_thread(postgres_repo.sync_all_trending_topics, trends)
+            print(f"[+] Background DB ready: auto-synced {synced} real users & {synced_trends} trending topics to PostgreSQL!")
+        except Exception as e:
+            print(f"[!] Background DB initialization notice: {e}")
+
+    asyncio.create_task(init_and_sync_db())
     # Start background live stream task
     broadcast_task = asyncio.create_task(stream_broadcaster.broadcast_live_event())
     yield
@@ -184,6 +197,39 @@ class RepostRequest(BaseModel):
     author_avatar: Optional[str] = None
     author_role: Optional[str] = "Analyst"
     commentary: Optional[str] = None
+
+# Media Uploads Directory
+UPLOAD_DIR = os.path.join(FRONTEND_DIR, "uploads")
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+@app.post("/api/media/upload")
+async def upload_media_file(file: UploadFile = File(...)):
+    """
+    Receives user photo/video file upload, writes to disk, and returns the accessible URL
+    for persistence in PostgreSQL database.
+    """
+    import uuid
+    import shutil
+
+    ext = os.path.splitext(file.filename)[1].lower() if file.filename else ".png"
+    if not ext:
+        ext = ".png" if "image" in (file.content_type or "") else ".mp4"
+
+    clean_filename = f"media_{uuid.uuid4().hex[:12]}{ext}"
+    dest_path = os.path.join(UPLOAD_DIR, clean_filename)
+
+    with open(dest_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    media_url = f"/static/uploads/{clean_filename}"
+    media_type = "video" if any(ext.endswith(x) for x in [".mp4", ".webm", ".mov", ".avi", ".mkv"]) or ("video" in (file.content_type or "")) else "photo"
+
+    return {
+        "success": True,
+        "media_url": media_url,
+        "media_type": media_type,
+        "filename": clean_filename
+    }
 
 @app.post("/api/posts/create")
 async def create_user_post(req: CreatePostRequest):
@@ -468,6 +514,17 @@ async def trigger_real_collection():
         "stats": real_user_manager.get_user_stats()
     }
 
+@app.post("/api/real-users/sync-db")
+async def sync_real_users_to_database():
+    """Forces synchronization of all authentic real users directly into the PostgreSQL real_users table"""
+    synced_count = postgres_repo.sync_all_real_users(real_user_manager.users)
+    return {
+        "status": "success",
+        "synced_users_count": synced_count,
+        "database": "PostgreSQL (Supabase)",
+        "table": "real_users"
+    }
+
 @app.get("/api/real-users/export")
 async def export_real_users(format: str = Query("json", pattern="^(json|csv)$")):
     """Export all collected real user data in JSON or CSV format for download"""
@@ -563,31 +620,43 @@ class LoginRequest(BaseModel):
 class RegisterRequest(BaseModel):
     username: str
     email: str
+    phone_number: str
     password: str
     full_name: Optional[str] = ""
     role: Optional[str] = "Analyst"
     clearance_level: Optional[str] = "Level 3"
+
+class ForgotPasswordRequest(BaseModel):
+    identifier: str
+    new_password: str
 
 class LogoutRequest(BaseModel):
     token: str
 
 @app.post("/api/auth/login")
 async def auth_login(req: LoginRequest):
-    """Authenticate operator credentials and issue session token"""
+    """Authenticate credentials (User ID / Email / Phone Number + Password) and issue session token"""
     res = auth_manager.login(req.username, req.password)
     return res
 
 @app.post("/api/auth/register")
 async def auth_register(req: RegisterRequest):
-    """Register new security clearance profile & credentials"""
+    """Register new security clearance profile & credentials directly to database"""
     res = auth_manager.register(
         username=req.username,
         email=req.email,
+        phone_number=req.phone_number,
         password=req.password,
         full_name=req.full_name or "",
         role=req.role or "Analyst",
         clearance_level=req.clearance_level or "Level 3"
     )
+    return res
+
+@app.post("/api/auth/forgot-password")
+async def auth_forgot_password(req: ForgotPasswordRequest):
+    """Reset user password in PostgreSQL database by User ID, Email, or Phone Number"""
+    res = auth_manager.forgot_password(req.identifier, req.new_password)
     return res
 
 @app.get("/api/auth/me")

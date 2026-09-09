@@ -65,7 +65,7 @@ def init_engine(db_url: Optional[str] = None):
             max_overflow=20,
             pool_pre_ping=True,
             pool_recycle=1800,
-            connect_args={"connect_timeout": 2}
+            connect_args={"connect_timeout": 15}
         )
         SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
         return engine

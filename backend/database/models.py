@@ -55,7 +55,7 @@ class PostRecord(Base):
 
     # Media Attachments (Photos / Videos)
     media_type = Column(String(32), default="none")  # "none", "photo", "video"
-    media_url = Column(String(1024), nullable=True)
+    media_url = Column(Text, nullable=True)
 
     # Comments Counter
     comments_count = Column(Integer, default=0)
@@ -159,6 +159,7 @@ class AppUserRecord(Base):
     id = Column(String(64), primary_key=True, index=True)
     username = Column(String(64), unique=True, index=True, nullable=False)
     email = Column(String(128), unique=True, index=True, nullable=False)
+    phone_number = Column(String(32), index=True, nullable=True, default="")
     password_hash = Column(String(256), nullable=False)
     salt = Column(String(64), nullable=False)
     full_name = Column(String(128), default="")

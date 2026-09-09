@@ -96,6 +96,11 @@ export const ApiClient = {
     return await res.json();
   },
 
+  async syncRealUsersToDb() {
+    const res = await fetch(`${API_BASE}/api/real-users/sync-db`, { method: 'POST' });
+    return await res.json();
+  },
+
   async exportRealUsers(format = 'json') {
     window.open(`${API_BASE}/api/real-users/export?format=${format}`, '_blank');
   },

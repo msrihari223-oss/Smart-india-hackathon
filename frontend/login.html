@@ -3,13 +3,13 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AETHERIA // Access Portal & Authentication</title>
-  <meta name="description" content="Secure Access Portal for AETHERIA AI Social Media Intelligence & Network Framework" />
+  <title>Social Media Analytics // Access Portal</title>
+  <meta name="description" content="Secure Access Portal for Social Media Analytics - AI-Driven Multi-Vector Audience Framework" />
   
-  <!-- Fonts -->
+  <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
   
   <!-- Font Awesome -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
@@ -17,30 +17,31 @@
   <style>
     :root {
       --bg-dark: #07090e;
-      --bg-card: rgba(14, 18, 27, 0.75);
-      --bg-card-hover: rgba(22, 28, 42, 0.85);
-      --bg-input: rgba(10, 14, 22, 0.8);
+      --bg-card: rgba(13, 17, 26, 0.85);
+      --bg-card-hover: rgba(20, 26, 40, 0.92);
+      --bg-input: rgba(8, 12, 20, 0.85);
       
       --primary: #6366f1;
       --primary-light: #818cf8;
-      --primary-glow: rgba(99, 102, 241, 0.35);
+      --primary-glow: rgba(99, 102, 241, 0.4);
       
       --neon-cyan: #06b6d4;
-      --neon-cyan-glow: rgba(6, 182, 212, 0.3);
+      --neon-cyan-glow: rgba(6, 182, 212, 0.35);
       --neon-emerald: #10b981;
+      --neon-emerald-glow: rgba(16, 185, 129, 0.35);
       --neon-purple: #a855f7;
       --neon-rose: #f43f5e;
       --neon-amber: #f59e0b;
       
-      --text-main: #f1f5f9;
+      --text-main: #f8fafc;
       --text-muted: #94a3b8;
       --text-dim: #64748b;
       
-      --border-subtle: rgba(255, 255, 255, 0.08);
-      --border-active: rgba(99, 102, 241, 0.5);
-      --radius-lg: 16px;
-      --radius-md: 10px;
-      --radius-sm: 6px;
+      --border-subtle: rgba(255, 255, 255, 0.09);
+      --border-active: rgba(99, 102, 241, 0.6);
+      --radius-lg: 18px;
+      --radius-md: 12px;
+      --radius-sm: 8px;
     }
 
     * {
@@ -61,7 +62,7 @@
       align-items: center;
       overflow-x: hidden;
       position: relative;
-      padding: 1.5rem;
+      padding: 1.5rem 1rem;
     }
 
     /* Ambient Cyber Background Grid & Orbs */
@@ -69,21 +70,21 @@
       position: fixed;
       inset: 0;
       background-image: 
-        linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
-        linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
-      background-size: 38px 38px;
+        linear-gradient(to right, rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+      background-size: 36px 36px;
       z-index: 0;
       pointer-events: none;
     }
 
     .glow-orb-1 {
       position: fixed;
-      top: 15%;
-      left: 18%;
-      width: 420px;
-      height: 420px;
-      background: radial-gradient(circle, rgba(99, 102, 241, 0.18) 0%, transparent 70%);
-      filter: blur(60px);
+      top: 10%;
+      left: 15%;
+      width: 460px;
+      height: 460px;
+      background: radial-gradient(circle, rgba(99, 102, 241, 0.22) 0%, transparent 70%);
+      filter: blur(70px);
       z-index: 0;
       pointer-events: none;
       animation: floatSlow 12s ease-in-out infinite alternate;
@@ -91,33 +92,33 @@
 
     .glow-orb-2 {
       position: fixed;
-      bottom: 12%;
-      right: 18%;
-      width: 460px;
-      height: 460px;
-      background: radial-gradient(circle, rgba(6, 182, 212, 0.15) 0%, transparent 70%);
-      filter: blur(60px);
+      bottom: 8%;
+      right: 15%;
+      width: 500px;
+      height: 500px;
+      background: radial-gradient(circle, rgba(6, 182, 212, 0.18) 0%, transparent 70%);
+      filter: blur(70px);
       z-index: 0;
       pointer-events: none;
-      animation: floatSlow 15s ease-in-out infinite alternate-reverse;
+      animation: floatSlow 16s ease-in-out infinite alternate-reverse;
     }
 
     @keyframes floatSlow {
       0% { transform: translate(0, 0) scale(1); }
-      100% { transform: translate(30px, -40px) scale(1.1); }
+      100% { transform: translate(35px, -45px) scale(1.12); }
     }
 
-    /* Top Telemetry Bar */
+    /* Top Telemetry Header */
     .top-telemetry {
       position: absolute;
-      top: 1.5rem;
+      top: 1.25rem;
       left: 2rem;
       right: 2rem;
       display: flex;
       justify-content: space-between;
       align-items: center;
       font-family: 'JetBrains Mono', monospace;
-      font-size: 0.75rem;
+      font-size: 0.76rem;
       color: var(--text-dim);
       z-index: 10;
     }
@@ -126,24 +127,25 @@
       display: inline-flex;
       align-items: center;
       gap: 0.5rem;
-      background: rgba(255, 255, 255, 0.03);
-      padding: 0.35rem 0.75rem;
+      background: rgba(255, 255, 255, 0.04);
+      padding: 0.4rem 0.85rem;
       border-radius: var(--radius-sm);
       border: 1px solid var(--border-subtle);
+      backdrop-filter: blur(10px);
     }
 
     .pulse-dot {
-      width: 7px;
-      height: 7px;
+      width: 8px;
+      height: 8px;
       border-radius: 50%;
       background: var(--neon-emerald);
-      box-shadow: 0 0 8px var(--neon-emerald);
+      box-shadow: 0 0 10px var(--neon-emerald);
       animation: pulse 2s infinite;
     }
 
     @keyframes pulse {
       0%, 100% { opacity: 1; transform: scale(1); }
-      50% { opacity: 0.4; transform: scale(0.85); }
+      50% { opacity: 0.35; transform: scale(0.85); }
     }
 
     /* Main Auth Container */
@@ -151,21 +153,21 @@
       position: relative;
       z-index: 10;
       width: 100%;
-      max-width: 480px;
-      margin: auto;
+      max-width: 520px;
+      margin: 2.5rem auto 2rem;
     }
 
     .auth-card {
       background: var(--bg-card);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
+      backdrop-filter: blur(28px);
+      -webkit-backdrop-filter: blur(28px);
       border: 1px solid var(--border-subtle);
       border-radius: var(--radius-lg);
-      padding: 2.25rem 2rem;
-      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7), 0 0 40px rgba(99, 102, 241, 0.08);
+      padding: 2.25rem 2.25rem;
+      box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.8), 0 0 45px rgba(99, 102, 241, 0.12);
       position: relative;
       overflow: hidden;
-      transition: border-color 0.3s ease;
+      transition: all 0.3s ease;
     }
 
     .auth-card::before {
@@ -174,8 +176,8 @@
       top: 0;
       left: 0;
       right: 0;
-      height: 2px;
-      background: linear-gradient(90deg, transparent, var(--neon-cyan), var(--primary), transparent);
+      height: 3px;
+      background: linear-gradient(90deg, transparent, var(--neon-cyan), var(--primary), var(--neon-purple), transparent);
     }
 
     /* Brand Header */
@@ -185,22 +187,22 @@
     }
 
     .brand-icon-wrap {
-      width: 54px;
-      height: 54px;
-      margin: 0 auto 1rem;
-      border-radius: 14px;
-      background: linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(6, 182, 212, 0.2));
-      border: 1px solid rgba(99, 102, 241, 0.4);
+      width: 58px;
+      height: 58px;
+      margin: 0 auto 0.85rem;
+      border-radius: 16px;
+      background: linear-gradient(135deg, rgba(99, 102, 241, 0.25), rgba(6, 182, 212, 0.25));
+      border: 1px solid rgba(99, 102, 241, 0.5);
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 1.5rem;
+      font-size: 1.6rem;
       color: var(--neon-cyan);
-      box-shadow: 0 0 20px rgba(6, 182, 212, 0.25);
+      box-shadow: 0 0 25px rgba(6, 182, 212, 0.3);
     }
 
     .brand-title {
-      font-size: 1.4rem;
+      font-size: 1.5rem;
       font-weight: 800;
       letter-spacing: 0.06em;
       background: linear-gradient(135deg, #ffffff 40%, var(--primary-light) 100%);
@@ -209,10 +211,10 @@
     }
 
     .brand-subtitle {
-      font-size: 0.8rem;
+      font-size: 0.82rem;
       color: var(--text-muted);
       margin-top: 0.25rem;
-      letter-spacing: 0.04em;
+      letter-spacing: 0.03em;
     }
 
     /* Auth Tab Toggle */
@@ -220,8 +222,8 @@
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: 0.5rem;
-      background: rgba(10, 14, 22, 0.6);
-      padding: 0.35rem;
+      background: rgba(8, 12, 20, 0.7);
+      padding: 0.4rem;
       border-radius: var(--radius-md);
       border: 1px solid var(--border-subtle);
       margin-bottom: 1.5rem;
@@ -231,8 +233,8 @@
       background: transparent;
       border: none;
       color: var(--text-muted);
-      padding: 0.65rem 0.5rem;
-      font-size: 0.85rem;
+      padding: 0.7rem 0.5rem;
+      font-size: 0.88rem;
       font-weight: 600;
       border-radius: var(--radius-sm);
       cursor: pointer;
@@ -240,7 +242,7 @@
       align-items: center;
       justify-content: center;
       gap: 0.5rem;
-      transition: all 0.2s ease;
+      transition: all 0.25s ease;
     }
 
     .auth-tab-btn:hover {
@@ -250,49 +252,60 @@
     .auth-tab-btn.active {
       background: var(--primary);
       color: #ffffff;
-      box-shadow: 0 4px 12px var(--primary-glow);
+      box-shadow: 0 4px 14px var(--primary-glow);
     }
 
-    /* Alerts */
+    /* Alert / Feedback Notification */
     .auth-alert {
       display: none;
-      padding: 0.75rem 1rem;
+      padding: 0.85rem 1.1rem;
       border-radius: var(--radius-sm);
-      font-size: 0.82rem;
+      font-size: 0.85rem;
       margin-bottom: 1.25rem;
-      line-height: 1.4;
+      line-height: 1.45;
       align-items: center;
-      gap: 0.6rem;
+      gap: 0.75rem;
+      animation: fadeIn 0.3s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-4px); }
+      to { opacity: 1; transform: translateY(0); }
     }
 
     .auth-alert.error {
       display: flex;
-      background: rgba(244, 63, 94, 0.12);
-      border: 1px solid rgba(244, 63, 94, 0.3);
+      background: rgba(244, 63, 94, 0.15);
+      border: 1px solid rgba(244, 63, 94, 0.4);
       color: #fda4af;
     }
 
     .auth-alert.success {
       display: flex;
-      background: rgba(16, 185, 129, 0.12);
-      border: 1px solid rgba(16, 185, 129, 0.3);
+      background: rgba(16, 185, 129, 0.15);
+      border: 1px solid rgba(16, 185, 129, 0.4);
       color: #6ee7b7;
     }
 
     /* Form Styles */
     .form-group {
-      margin-bottom: 1.15rem;
+      margin-bottom: 1.2rem;
     }
 
     .form-label {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      font-size: 0.78rem;
+      font-size: 0.8rem;
       font-weight: 600;
       color: var(--text-muted);
       margin-bottom: 0.45rem;
       letter-spacing: 0.02em;
+    }
+
+    .form-label .req-star {
+      color: var(--neon-rose);
+      margin-left: 2px;
     }
 
     .input-wrapper {
@@ -305,7 +318,7 @@
       position: absolute;
       left: 1rem;
       color: var(--text-dim);
-      font-size: 0.9rem;
+      font-size: 0.92rem;
       pointer-events: none;
       transition: color 0.2s;
     }
@@ -315,9 +328,9 @@
       background: var(--bg-input);
       border: 1px solid var(--border-subtle);
       border-radius: var(--radius-md);
-      padding: 0.75rem 1rem 0.75rem 2.6rem;
+      padding: 0.8rem 1rem 0.8rem 2.7rem;
       color: var(--text-main);
-      font-size: 0.88rem;
+      font-size: 0.9rem;
       outline: none;
       transition: all 0.2s ease;
     }
@@ -339,8 +352,8 @@
       border: none;
       color: var(--text-dim);
       cursor: pointer;
-      padding: 0.25rem;
-      font-size: 0.9rem;
+      padding: 0.35rem;
+      font-size: 0.95rem;
       transition: color 0.2s;
     }
 
@@ -354,15 +367,17 @@
       background: var(--bg-input);
       border: 1px solid var(--border-subtle);
       border-radius: var(--radius-md);
-      padding: 0.75rem 1rem;
+      padding: 0.8rem 1rem;
       color: var(--text-main);
-      font-size: 0.88rem;
+      font-size: 0.9rem;
       outline: none;
       cursor: pointer;
+      transition: border-color 0.2s;
     }
 
     .auth-select:focus {
       border-color: var(--primary);
+      box-shadow: 0 0 0 3px var(--primary-glow);
     }
 
     .auth-select option {
@@ -375,15 +390,15 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      font-size: 0.78rem;
+      font-size: 0.82rem;
       color: var(--text-muted);
-      margin-bottom: 1.25rem;
+      margin-bottom: 1.35rem;
     }
 
     .remember-me {
       display: flex;
       align-items: center;
-      gap: 0.45rem;
+      gap: 0.5rem;
       cursor: pointer;
     }
 
@@ -392,14 +407,30 @@
       cursor: pointer;
     }
 
+    .link-forgot {
+      color: var(--neon-cyan);
+      text-decoration: none;
+      font-weight: 500;
+      transition: color 0.2s;
+      cursor: pointer;
+      background: none;
+      border: none;
+      font-size: 0.82rem;
+    }
+
+    .link-forgot:hover {
+      color: #38bdf8;
+      text-decoration: underline;
+    }
+
     /* Submit Button */
     .btn-submit {
       width: 100%;
-      background: linear-gradient(135deg, var(--primary) 0%, #4f46e5 100%);
+      background: linear-gradient(135deg, var(--primary) 0%, #4338ca 100%);
       color: #ffffff;
       border: none;
-      padding: 0.85rem;
-      font-size: 0.92rem;
+      padding: 0.9rem;
+      font-size: 0.95rem;
       font-weight: 700;
       letter-spacing: 0.04em;
       border-radius: var(--radius-md);
@@ -407,14 +438,14 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 0.6rem;
-      box-shadow: 0 4px 14px var(--primary-glow);
-      transition: all 0.2s ease;
+      gap: 0.65rem;
+      box-shadow: 0 4px 16px var(--primary-glow);
+      transition: all 0.25s ease;
     }
 
     .btn-submit:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 6px 20px rgba(99, 102, 241, 0.5);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 24px rgba(99, 102, 241, 0.55);
     }
 
     .btn-submit:active {
@@ -427,7 +458,31 @@
       transform: none;
     }
 
-    /* Demo Access Section */
+    /* Secondary back button in forgot password */
+    .btn-back-link {
+      background: transparent;
+      border: 1px solid var(--border-subtle);
+      color: var(--text-muted);
+      padding: 0.65rem 1rem;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      font-size: 0.82rem;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      margin-top: 1rem;
+      width: 100%;
+      justify-content: center;
+      transition: all 0.2s;
+    }
+
+    .btn-back-link:hover {
+      color: var(--text-main);
+      border-color: var(--primary-light);
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    /* Demo Quick Access */
     .demo-access-wrap {
       margin-top: 1.5rem;
       padding-top: 1.25rem;
@@ -455,23 +510,23 @@
     }
 
     .demo-chip {
-      background: rgba(255, 255, 255, 0.03);
+      background: rgba(255, 255, 255, 0.035);
       border: 1px solid var(--border-subtle);
       border-radius: var(--radius-sm);
-      padding: 0.55rem 0.4rem;
+      padding: 0.6rem 0.4rem;
       text-align: center;
       cursor: pointer;
       transition: all 0.2s ease;
     }
 
     .demo-chip:hover {
-      background: rgba(99, 102, 241, 0.12);
+      background: rgba(99, 102, 241, 0.15);
       border-color: var(--primary-light);
-      transform: translateY(-1px);
+      transform: translateY(-2px);
     }
 
     .demo-chip-role {
-      font-size: 0.74rem;
+      font-size: 0.76rem;
       font-weight: 700;
       color: var(--text-main);
       display: block;
@@ -479,17 +534,17 @@
 
     .demo-chip-clearance {
       font-family: 'JetBrains Mono', monospace;
-      font-size: 0.65rem;
+      font-size: 0.66rem;
       color: var(--neon-cyan);
       display: block;
-      margin-top: 0.15rem;
+      margin-top: 0.2rem;
     }
 
-    /* Guest Access Link */
+    /* Guest Bypass Link */
     .guest-link-wrap {
       text-align: center;
-      margin-top: 1.25rem;
-      font-size: 0.8rem;
+      margin-top: 1.35rem;
+      font-size: 0.84rem;
     }
 
     .guest-link {
@@ -498,22 +553,141 @@
       transition: color 0.2s;
       display: inline-flex;
       align-items: center;
-      gap: 0.35rem;
+      gap: 0.4rem;
     }
 
     .guest-link:hover {
       color: var(--neon-cyan);
     }
 
-    /* Footer */
-    .auth-footer {
-      position: absolute;
-      bottom: 1.25rem;
+    /* Pop-up Modal for Candidate Not Found */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(4, 6, 12, 0.85);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5rem;
+      animation: modalFadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    @keyframes modalFadeIn {
+      from { opacity: 0; transform: scale(0.92); }
+      to { opacity: 1; transform: scale(1); }
+    }
+
+    .modal-box {
+      background: #0d121f;
+      border: 1px solid rgba(244, 63, 94, 0.55);
+      border-radius: 20px;
+      max-width: 440px;
+      width: 100%;
+      padding: 2.25rem 2rem;
       text-align: center;
+      box-shadow: 0 25px 65px rgba(0, 0, 0, 0.95), 0 0 40px rgba(244, 63, 94, 0.3);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .modal-box::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, transparent, #f43f5e, #fda4af, transparent);
+    }
+
+    .modal-icon-wrap {
+      width: 72px;
+      height: 72px;
+      margin: 0 auto 1.25rem;
+      border-radius: 50%;
+      background: rgba(244, 63, 94, 0.15);
+      border: 2px solid rgba(244, 63, 94, 0.65);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 2.1rem;
+      color: #f43f5e;
+      box-shadow: 0 0 30px rgba(244, 63, 94, 0.4);
+      animation: pulseWarning 2s infinite alternate;
+    }
+
+    @keyframes pulseWarning {
+      0% { transform: scale(1); box-shadow: 0 0 15px rgba(244, 63, 94, 0.3); }
+      100% { transform: scale(1.06); box-shadow: 0 0 35px rgba(244, 63, 94, 0.6); }
+    }
+
+    .modal-title {
+      font-size: 1.5rem;
+      font-weight: 800;
+      color: #ffffff;
+      letter-spacing: 0.04em;
+      margin-bottom: 0.5rem;
+    }
+
+    .modal-msg {
+      font-size: 1.18rem;
+      font-weight: 700;
+      color: #fda4af;
+      margin-bottom: 0.75rem;
       font-family: 'JetBrains Mono', monospace;
-      font-size: 0.72rem;
-      color: var(--text-dim);
-      z-index: 10;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .modal-desc {
+      font-size: 0.86rem;
+      color: #94a3b8;
+      line-height: 1.55;
+      margin-bottom: 1.75rem;
+    }
+
+    .modal-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.75rem;
+    }
+
+    .btn-modal-close {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: #f1f5f9;
+      padding: 0.85rem;
+      border-radius: 10px;
+      font-weight: 600;
+      font-size: 0.88rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-modal-close:hover {
+      background: rgba(255, 255, 255, 0.12);
+      border-color: rgba(255, 255, 255, 0.3);
+    }
+
+    .btn-modal-register {
+      background: linear-gradient(135deg, #6366f1, #4f46e5);
+      border: none;
+      color: #ffffff;
+      padding: 0.85rem;
+      border-radius: 10px;
+      font-weight: 700;
+      font-size: 0.88rem;
+      cursor: pointer;
+      box-shadow: 0 4px 14px rgba(99, 102, 241, 0.4);
+      transition: all 0.2s;
+    }
+
+    .btn-modal-register:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 20px rgba(99, 102, 241, 0.6);
     }
 
     @media (max-width: 540px) {
@@ -523,7 +697,7 @@
       .auth-card {
         padding: 1.75rem 1.25rem;
       }
-      .demo-chips {
+      .modal-actions {
         grid-template-columns: 1fr;
       }
     }
@@ -536,18 +710,6 @@
   <div class="glow-orb-1"></div>
   <div class="glow-orb-2"></div>
 
-  <!-- Top Telemetry -->
-  <div class="top-telemetry">
-    <div class="telemetry-tag">
-      <div class="pulse-dot"></div>
-      <span>SYS_GATE // ENCRYPTION ACTIVE</span>
-    </div>
-    <div class="telemetry-tag">
-      <i class="fas fa-shield-halved" style="color: var(--primary-light);"></i>
-      <span>SENTINEL-X NODE v2.0</span>
-    </div>
-  </div>
-
   <!-- Auth Card Container -->
   <div class="auth-card-container">
     <div class="auth-card">
@@ -557,43 +719,46 @@
         <div class="brand-icon-wrap">
           <i class="fas fa-network-wired"></i>
         </div>
-        <h1 class="brand-title">AETHERIA // ACCESS</h1>
-        <p class="brand-subtitle">AI Multi-Vector Social Intelligence Command</p>
+        <h1 class="brand-title">SOCIAL MEDIA ANALYTICS</h1>
+        <p class="brand-subtitle">AI-Driven Multi-Vector Audience Framework</p>
       </div>
 
       <!-- Tab Switcher -->
-      <div class="auth-tabs">
+      <div class="auth-tabs" id="tab-container">
         <button id="tab-login" class="auth-tab-btn active" onclick="switchTab('login')">
-          <i class="fas fa-lock-open"></i> Operator Sign In
+          <i class="fas fa-lock-open"></i> Log In (Sign In)
         </button>
         <button id="tab-register" class="auth-tab-btn" onclick="switchTab('register')">
-          <i class="fas fa-user-plus"></i> Request Clearance
+          <i class="fas fa-user-plus"></i> Create Account
         </button>
       </div>
 
       <!-- Alert Box -->
       <div id="auth-alert" class="auth-alert">
         <i id="alert-icon" class="fas fa-circle-exclamation"></i>
-        <span id="alert-msg">Error details</span>
+        <span id="alert-msg">Notification message</span>
       </div>
 
-      <!-- ================= LOGIN FORM ================= -->
+      <!-- ================= 1. LOG IN (SIGN IN) FORM ================= -->
       <form id="form-login" onsubmit="handleLogin(event)">
         <div class="form-group">
-          <label class="form-label" for="login-username">Operator Handle / Email</label>
+          <label class="form-label" for="login-identifier">
+            <span>User ID / Email / Phone Number<span class="req-star">*</span></span>
+          </label>
           <div class="input-wrapper">
             <i class="fas fa-user-shield input-icon"></i>
-            <input type="text" id="login-username" class="auth-input" placeholder="e.g. admin or analyst" required autocomplete="username" />
+            <input type="text" id="login-identifier" class="auth-input" placeholder="Enter User ID, Email, or Phone Number" required autocomplete="username" />
           </div>
         </div>
 
         <div class="form-group">
           <div class="form-label">
-            <span>Passcode / Key</span>
+            <span>Password<span class="req-star">*</span></span>
+            <button type="button" class="link-forgot" onclick="switchTab('forgot')">Forgot Password?</button>
           </div>
           <div class="input-wrapper">
             <i class="fas fa-key input-icon"></i>
-            <input type="password" id="login-password" class="auth-input" placeholder="Enter security passcode" required autocomplete="current-password" />
+            <input type="password" id="login-password" class="auth-input" placeholder="Enter security password" required autocomplete="current-password" />
             <button type="button" class="toggle-pwd-btn" onclick="togglePasswordVisibility('login-password', this)">
               <i class="fas fa-eye"></i>
             </button>
@@ -603,122 +768,176 @@
         <div class="form-options">
           <label class="remember-me">
             <input type="checkbox" id="login-remember" checked />
-            <span>Remember session on this station</span>
+            <span>Keep session active on this station</span>
           </label>
         </div>
 
         <button type="submit" id="btn-login-submit" class="btn-submit">
-          <i class="fas fa-satellite-dish"></i> Authorize & Enter Command Center
+          <i class="fas fa-satellite-dish"></i> Log In to Intelligence Command
         </button>
-
-        <!-- Quick 1-Click Demo Profiles -->
-        <div class="demo-access-wrap">
-          <div class="demo-title">
-            <i class="fas fa-bolt" style="color: var(--neon-amber);"></i> Quick Demo Clearance Logins
-          </div>
-          <div class="demo-chips">
-            <div class="demo-chip" onclick="fillDemo('admin', 'admin123')">
-              <span class="demo-chip-role">Director</span>
-              <span class="demo-chip-clearance">LVL 5 // Admin</span>
-            </div>
-            <div class="demo-chip" onclick="fillDemo('analyst', 'sentinel2026')">
-              <span class="demo-chip-role">Lead Analyst</span>
-              <span class="demo-chip-clearance">LVL 3 // Secret</span>
-            </div>
-            <div class="demo-chip" onclick="fillDemo('operator', 'operator123')">
-              <span class="demo-chip-role">Field Agent</span>
-              <span class="demo-chip-clearance">LVL 2 // Agent</span>
-            </div>
-          </div>
-        </div>
       </form>
 
-      <!-- ================= REGISTER FORM ================= -->
+      <!-- ================= 2. SIGN IN / SIGN UP (CREATE ACCOUNT) FORM ================= -->
       <form id="form-register" style="display: none;" onsubmit="handleRegister(event)">
+        
         <div class="form-group">
-          <label class="form-label" for="reg-fullname">Full Name & Rank</label>
-          <div class="input-wrapper">
-            <i class="fas fa-id-card input-icon"></i>
-            <input type="text" id="reg-fullname" class="auth-input" placeholder="e.g. Dr. Alex Mercer" required />
-          </div>
-        </div>
-
-        <div class="form-group">
-          <label class="form-label" for="reg-username">Operator Handle (Username)</label>
+          <label class="form-label" for="reg-username">
+            <span>User ID (Username)<span class="req-star">*</span></span>
+          </label>
           <div class="input-wrapper">
             <i class="fas fa-terminal input-icon"></i>
-            <input type="text" id="reg-username" class="auth-input" placeholder="e.g. amercer_ai" required autocomplete="username" />
+            <input type="text" id="reg-username" class="auth-input" placeholder="e.g. jdoe99 or analyst_mark" required autocomplete="username" />
           </div>
         </div>
 
         <div class="form-group">
-          <label class="form-label" for="reg-email">Official Comms Email</label>
+          <label class="form-label" for="reg-email">
+            <span>Official Email Address<span class="req-star">*</span></span>
+          </label>
           <div class="input-wrapper">
             <i class="fas fa-envelope input-icon"></i>
-            <input type="email" id="reg-email" class="auth-input" placeholder="name@organization.gov" required autocomplete="email" />
+            <input type="email" id="reg-email" class="auth-input" placeholder="name@domain.com" required autocomplete="email" />
           </div>
         </div>
 
         <div class="form-group">
-          <label class="form-label" for="reg-password">Access Passcode</label>
+          <label class="form-label" for="reg-phone">
+            <span>Phone Number<span class="req-star">*</span></span>
+          </label>
+          <div class="input-wrapper">
+            <i class="fas fa-phone input-icon"></i>
+            <input type="tel" id="reg-phone" class="auth-input" placeholder="e.g. +1-555-0199 or 9876543210" required autocomplete="tel" />
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="reg-password">
+            <span>Password (Min. 6 Chars)<span class="req-star">*</span></span>
+          </label>
           <div class="input-wrapper">
             <i class="fas fa-lock input-icon"></i>
-            <input type="password" id="reg-password" class="auth-input" placeholder="Minimum 6 characters" required autocomplete="new-password" />
+            <input type="password" id="reg-password" class="auth-input" placeholder="Create secure password" required autocomplete="new-password" />
             <button type="button" class="toggle-pwd-btn" onclick="togglePasswordVisibility('reg-password', this)">
               <i class="fas fa-eye"></i>
             </button>
           </div>
         </div>
 
-        <div class="form-group">
-          <label class="form-label" for="reg-role">Role Specialization</label>
-          <select id="reg-role" class="auth-select">
-            <option value="Lead Analyst">Lead Intelligence Analyst (Level 3)</option>
-            <option value="Threat Researcher">Threat & Disinformation Analyst (Level 3)</option>
-            <option value="Field Operator">Field Monitoring Operator (Level 2)</option>
-            <option value="Director / Admin">Operations Commander / Admin (Level 5)</option>
-          </select>
-        </div>
-
         <button type="submit" id="btn-reg-submit" class="btn-submit">
-          <i class="fas fa-id-badge"></i> Submit Clearance Registration
+          <i class="fas fa-id-badge"></i> Sign In & Save Credentials to Database
         </button>
       </form>
 
-      <!-- Guest Bypass Link -->
-      <div class="guest-link-wrap">
-        <a href="/" class="guest-link">
-          <i class="fas fa-arrow-right-to-bracket"></i> Continue as Guest Intelligence Observer
-        </a>
-      </div>
+      <!-- ================= 3. FORGOT PASSWORD FORM ================= -->
+      <form id="form-forgot" style="display: none;" onsubmit="handleForgotPassword(event)">
+        <div style="text-align: center; margin-bottom: 1.25rem;">
+          <h3 style="font-size: 1.1rem; color: var(--neon-cyan);">Reset Security Password</h3>
+          <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.2rem;">
+            Provide your registered User ID, Email, or Phone Number to update your credentials in the database.
+          </p>
+        </div>
 
+        <div class="form-group">
+          <label class="form-label" for="forgot-identifier">
+            <span>User ID / Email / Phone Number<span class="req-star">*</span></span>
+          </label>
+          <div class="input-wrapper">
+            <i class="fas fa-user-shield input-icon"></i>
+            <input type="text" id="forgot-identifier" class="auth-input" placeholder="Enter registered User ID, Email, or Phone Number" required />
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="forgot-new-pwd">
+            <span>New Password (Min. 6 Chars)<span class="req-star">*</span></span>
+          </label>
+          <div class="input-wrapper">
+            <i class="fas fa-lock input-icon"></i>
+            <input type="password" id="forgot-new-pwd" class="auth-input" placeholder="Enter new password" required autocomplete="new-password" />
+            <button type="button" class="toggle-pwd-btn" onclick="togglePasswordVisibility('forgot-new-pwd', this)">
+              <i class="fas fa-eye"></i>
+            </button>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="forgot-confirm-pwd">
+            <span>Confirm New Password<span class="req-star">*</span></span>
+          </label>
+          <div class="input-wrapper">
+            <i class="fas fa-check-double input-icon"></i>
+            <input type="password" id="forgot-confirm-pwd" class="auth-input" placeholder="Confirm new password" required autocomplete="new-password" />
+            <button type="button" class="toggle-pwd-btn" onclick="togglePasswordVisibility('forgot-confirm-pwd', this)">
+              <i class="fas fa-eye"></i>
+            </button>
+          </div>
+        </div>
+
+        <button type="submit" id="btn-forgot-submit" class="btn-submit">
+          <i class="fas fa-key"></i> Update Database Password
+        </button>
+
+        <button type="button" class="btn-back-link" onclick="switchTab('login')">
+          <i class="fas fa-arrow-left"></i> Back to Log In
+        </button>
+      </form>
+
+    </div>
+
+  </div>
+
+  <!-- ================= Candidate Not Found Pop-up Modal ================= -->
+  <div id="modal-not-found" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-icon-wrap">
+        <i class="fas fa-user-xmark"></i>
+      </div>
+      <h2 class="modal-title">ACCESS DENIED</h2>
+      <div class="modal-msg" id="modal-not-found-text">Candidate not found</div>
+      <p class="modal-desc">
+        The entered User ID, Email, or Phone Number does not match any authorized database record, or the password was incorrect.
+      </p>
+      <div class="modal-actions">
+        <button type="button" class="btn-modal-close" onclick="closeNotFoundModal()">
+          <i class="fas fa-rotate-left"></i> Try Again
+        </button>
+        <button type="button" class="btn-modal-register" onclick="switchToRegisterFromModal()">
+          <i class="fas fa-user-plus"></i> Sign In / Register
+        </button>
+      </div>
     </div>
   </div>
 
-  <!-- Footer -->
-  <div class="auth-footer">
-    AETHERIA SOCIAL INTELLIGENCE FRAMEWORK &copy; 2026 // ZERO-TRUST AUTHENTICATION
-  </div>
-
   <script>
-    // Tab Switching
+    // Tab Switching: 'login', 'register', 'forgot'
     function switchTab(mode) {
       const tabLogin = document.getElementById('tab-login');
       const tabRegister = document.getElementById('tab-register');
       const formLogin = document.getElementById('form-login');
       const formRegister = document.getElementById('form-register');
+      const formForgot = document.getElementById('form-forgot');
+      const tabContainer = document.getElementById('tab-container');
       hideAlert();
 
       if (mode === 'login') {
+        tabContainer.style.display = 'grid';
         tabLogin.classList.add('active');
         tabRegister.classList.remove('active');
         formLogin.style.display = 'block';
         formRegister.style.display = 'none';
-      } else {
+        formForgot.style.display = 'none';
+      } else if (mode === 'register') {
+        tabContainer.style.display = 'grid';
         tabRegister.classList.add('active');
         tabLogin.classList.remove('active');
         formRegister.style.display = 'block';
         formLogin.style.display = 'none';
+        formForgot.style.display = 'none';
+      } else if (mode === 'forgot') {
+        tabContainer.style.display = 'none';
+        formLogin.style.display = 'none';
+        formRegister.style.display = 'none';
+        formForgot.style.display = 'block';
       }
     }
 
@@ -751,22 +970,42 @@
       box.style.display = 'none';
     }
 
-    // Fill Demo Profile Credentials
-    function fillDemo(username, password) {
-      switchTab('login');
-      document.getElementById('login-username').value = username;
-      document.getElementById('login-password').value = password;
-      showAlert(`Selected ${username.toUpperCase()} demo profile. Click Authorize to proceed.`, false);
+    // Pop-up Modal Controls
+    function showNotFoundModal(msg = "Candidate not found") {
+      const modal = document.getElementById('modal-not-found');
+      const modalText = document.getElementById('modal-not-found-text');
+      if (modalText) modalText.textContent = msg;
+      modal.style.display = 'flex';
     }
 
-    // Handle Login API Request
+    function closeNotFoundModal() {
+      const modal = document.getElementById('modal-not-found');
+      modal.style.display = 'none';
+      const pwdInput = document.getElementById('login-password');
+      if (pwdInput) {
+        pwdInput.focus();
+        pwdInput.select();
+      }
+    }
+
+    function switchToRegisterFromModal() {
+      closeNotFoundModal();
+      switchTab('register');
+    }
+
+    // ================= HANDLE LOGIN =================
     async function handleLogin(e) {
       e.preventDefault();
       hideAlert();
 
-      const username = document.getElementById('login-username').value.trim();
+      const identifier = document.getElementById('login-identifier').value.trim();
       const password = document.getElementById('login-password').value;
       const btn = document.getElementById('btn-login-submit');
+
+      if (!identifier || !password) {
+        showAlert('Please enter your User ID, Email, or Phone Number and Password.', true);
+        return;
+      }
 
       btn.disabled = true;
       btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Verifying Credentials...';
@@ -775,7 +1014,7 @@
         const res = await fetch('/api/auth/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username, password })
+          body: JSON.stringify({ username: identifier, password: password })
         });
 
         const data = await res.json();
@@ -784,49 +1023,64 @@
           localStorage.setItem('aetheria_token', data.token);
           localStorage.setItem('aetheria_user', JSON.stringify(data.user));
           
-          showAlert('Authentication Verified! Access Granted. Redirecting...', false);
+          showAlert(data.message || 'Authentication verified! Access granted. Redirecting...', false);
           setTimeout(() => {
             window.location.href = '/';
-          }, 800);
+          }, 700);
         } else {
-          showAlert(data.message || 'Access Denied: Invalid credentials.', true);
+          // Trigger the 'Candidate not found' pop-up modal!
+          const errMsg = data.message || 'Candidate not found';
+          showAlert(errMsg, true);
+          showNotFoundModal(errMsg);
           btn.disabled = false;
-          btn.innerHTML = '<i class="fas fa-satellite-dish"></i> Authorize & Enter Command Center';
+          btn.innerHTML = '<i class="fas fa-satellite-dish"></i> Log In to Intelligence Command';
         }
       } catch (err) {
         console.error(err);
-        showAlert('Network or Server Connection Error. Please try again.', true);
+        showAlert('Network or Server Connection Error. Please verify server status.', true);
+        showNotFoundModal('Candidate not found');
         btn.disabled = false;
-        btn.innerHTML = '<i class="fas fa-satellite-dish"></i> Authorize & Enter Command Center';
+        btn.innerHTML = '<i class="fas fa-satellite-dish"></i> Log In to Intelligence Command';
       }
     }
 
-    // Handle Register API Request
+    // ================= HANDLE REGISTER (SIGN IN) =================
     async function handleRegister(e) {
       e.preventDefault();
       hideAlert();
 
-      const fullName = document.getElementById('reg-fullname').value.trim();
       const username = document.getElementById('reg-username').value.trim();
       const email = document.getElementById('reg-email').value.trim();
+      const phone = document.getElementById('reg-phone').value.trim();
+      const fullName = (document.getElementById('reg-fullname') ? document.getElementById('reg-fullname').value.trim() : "") || username;
       const password = document.getElementById('reg-password').value;
-      const role = document.getElementById('reg-role').value;
       const btn = document.getElementById('btn-reg-submit');
 
+      if (!username || !email || !phone || !password) {
+        showAlert('Please fill in all required fields (User ID, Email, Phone Number, Password).', true);
+        return;
+      }
+
+      if (password.length < 6) {
+        showAlert('Password must be at least 6 characters long.', true);
+        return;
+      }
+
       btn.disabled = true;
-      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Registering Clearance...';
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving Credentials to Database...';
 
       try {
         const res = await fetch('/api/auth/register', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            full_name: fullName,
             username: username,
             email: email,
+            phone_number: phone,
+            full_name: fullName,
             password: password,
-            role: role,
-            clearance_level: role.includes('Level 5') ? 'Level 5' : 'Level 3'
+            role: "Analyst",
+            clearance_level: "Level 3"
           })
         });
 
@@ -835,20 +1089,78 @@
           localStorage.setItem('aetheria_token', data.token);
           localStorage.setItem('aetheria_user', JSON.stringify(data.user));
 
-          showAlert('Clearance Profile Activated! Redirecting to Command Center...', false);
+          showAlert('Account registered and saved to database! Redirecting to Command Center...', false);
           setTimeout(() => {
             window.location.href = '/';
           }, 800);
         } else {
-          showAlert(data.message || 'Registration failed.', true);
+          showAlert(data.message || 'Registration failed. User ID or Email might already exist.', true);
           btn.disabled = false;
-          btn.innerHTML = '<i class="fas fa-id-badge"></i> Submit Clearance Registration';
+          btn.innerHTML = '<i class="fas fa-id-badge"></i> Sign In & Save Credentials to Database';
         }
       } catch (err) {
         console.error(err);
-        showAlert('Network or Server Connection Error. Please try again.', true);
+        showAlert('Network error occurred during registration. Please try again.', true);
         btn.disabled = false;
-        btn.innerHTML = '<i class="fas fa-id-badge"></i> Submit Clearance Registration';
+        btn.innerHTML = '<i class="fas fa-id-badge"></i> Sign In & Save Credentials to Database';
+      }
+    }
+
+    // ================= HANDLE FORGOT PASSWORD =================
+    async function handleForgotPassword(e) {
+      e.preventDefault();
+      hideAlert();
+
+      const identifier = document.getElementById('forgot-identifier').value.trim();
+      const newPwd = document.getElementById('forgot-new-pwd').value;
+      const confirmPwd = document.getElementById('forgot-confirm-pwd').value;
+      const btn = document.getElementById('btn-forgot-submit');
+
+      if (!identifier) {
+        showAlert('Please provide your User ID, Email, or Phone Number.', true);
+        return;
+      }
+
+      if (newPwd.length < 6) {
+        showAlert('New password must be at least 6 characters long.', true);
+        return;
+      }
+
+      if (newPwd !== confirmPwd) {
+        showAlert('New passwords do not match. Please re-enter carefully.', true);
+        return;
+      }
+
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Updating Database...';
+
+      try {
+        const res = await fetch('/api/auth/forgot-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            identifier: identifier,
+            new_password: newPwd
+          })
+        });
+
+        const data = await res.json();
+        if (data.success) {
+          showAlert(data.message || 'Password updated successfully! Switching to Log In...', false);
+          setTimeout(() => {
+            switchTab('login');
+            document.getElementById('login-identifier').value = identifier;
+            document.getElementById('login-password').value = newPwd;
+          }, 1200);
+        } else {
+          showAlert(data.message || 'User not found. Please verify your details or sign in first.', true);
+        }
+      } catch (err) {
+        console.error(err);
+        showAlert('Network or server error during password reset.', true);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-key"></i> Update Database Password';
       }
     }
 
@@ -866,7 +1178,7 @@
             }, 600);
           }
         } catch (e) {
-          // Ignore and let user log in
+          // Stay on page
         }
       }
     });

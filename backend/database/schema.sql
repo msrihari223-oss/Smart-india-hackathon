@@ -44,7 +44,7 @@ CREATE TABLE IF NOT EXISTS post_records (
 
     -- Media Attachments (Photos / Videos)
     media_type VARCHAR(32) DEFAULT 'none',
-    media_url VARCHAR(1024),
+    media_url TEXT,
     comments_count INT DEFAULT 0,
     
     -- Full Raw Payload
@@ -139,6 +139,7 @@ CREATE TABLE IF NOT EXISTS app_users (
     id VARCHAR(64) PRIMARY KEY,
     username VARCHAR(64) UNIQUE NOT NULL,
     email VARCHAR(128) UNIQUE NOT NULL,
+    phone_number VARCHAR(32) DEFAULT '',
     password_hash VARCHAR(256) NOT NULL,
     salt VARCHAR(64) NOT NULL,
     full_name VARCHAR(128) DEFAULT '',
@@ -152,6 +153,7 @@ CREATE TABLE IF NOT EXISTS app_users (
 
 CREATE INDEX IF NOT EXISTS ix_app_user_username ON app_users(username);
 CREATE INDEX IF NOT EXISTS ix_app_user_email ON app_users(email);
+CREATE INDEX IF NOT EXISTS ix_app_user_phone ON app_users(phone_number);
 
 -- Post Likes Table (Automatic User Likes Persistence)
 CREATE TABLE IF NOT EXISTS post_likes (
