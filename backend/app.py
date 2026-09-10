@@ -164,9 +164,7 @@ async def get_influencer_rankings(
     net_kols = {k["id"]: k for k in net_data.get("kols", [])}
 
     # Use indexed user list efficiently
-    user_pool = list(real_user_manager.users.values())
-    if len(user_pool) > 600:
-        user_pool = user_pool[:600]
+    user_pool = list(real_user_manager.users.values())[:250]
 
     all_creators = []
     country_keywords = [

@@ -60,7 +60,7 @@ class RealUserManager:
         self.platform_index: Dict[str, List[str]] = {
             "telegram": [], "x": [], "instagram": [], "youtube": [], "reddit": [], "facebook": []
         }
-        self.seed_scale_users(count_per_platform=1000)
+        self.seed_scale_users(count_per_platform=10000)
 
     def seed_scale_users(self, count_per_platform: int = 10000):
         """Generates authentic real user indices scaled to 10,000 users per platform"""
@@ -236,8 +236,14 @@ class RealUserManager:
         plat_k = platform.lower() if platform else 'all'
         if plat_k != 'all' and plat_k in self.platform_index:
             candidate_ids = self.platform_index[plat_k]
+            if not search:
+                # Fast path: candidate_ids is already indexed by activity/followers
+                return [self.users[uid] for uid in candidate_ids[:limit] if uid in self.users]
             results = [self.users[uid] for uid in candidate_ids if uid in self.users]
         else:
+            if not search:
+                # Fast path: take initial batch directly
+                return list(self.users.values())[:limit]
             results = list(self.users.values())
 
         if search:
