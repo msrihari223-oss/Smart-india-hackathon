@@ -283,7 +283,7 @@ async def check_toxicity_fast(req: CustomAnalysisRequest):
 # ----------------- Media Posting & Interactive Comments Endpoints -----------------
 
 class CreatePostRequest(BaseModel):
-    text: str
+    text: Optional[str] = ""
     platform: Optional[str] = "X"
     media_type: Optional[str] = "none"  # "none", "photo", "video"
     media_url: Optional[str] = None
@@ -359,19 +359,46 @@ async def create_user_post(req: CreatePostRequest):
     now_epoch = time.time()
     now_iso = datetime.fromtimestamp(now_epoch).strftime('%H:%M:%S')
 
-    sentiment_res = sentiment_engine.analyze(req.text)
-    demo_res = demographic_engine.infer_profile("", req.text, req.location or "Global Station")
+    final_text = (req.text or "").strip()
+    media_url = (req.media_url or "").strip() or None
     
-    avatar = req.author_avatar or f"https://api.dicebear.com/7.x/bottts/svg?seed={req.author_username}"
+    # Media type detection
+    media_type = (req.media_type or "none").lower()
+    if media_url:
+      if (
+          media_type == "video"
+          or any(
+              media_url.lower().endswith(x)
+              for x in [".mp4", ".webm", ".mov", ".avi", ".mkv"]
+          )
+          or media_url.startswith("data:video")
+      ):
+        media_type = "video"
+      else:
+        media_type = "photo"
+
+    # Default description if caption is left empty
+    if not final_text:
+      if media_type == "video":
+        final_text = "📹 Video stream broadcast attachment."
+      elif media_url:
+        final_text = "📷 Visual intelligence capture."
+      else:
+        final_text = "Live dispatch broadcast."
+
+    sentiment_res = sentiment_engine.analyze(final_text)
+    demo_res = demographic_engine.infer_profile("", final_text, req.location or "Global Station")
+    
+    avatar = req.author_avatar or f"https://api.dicebear.com/7.x/bottts/svg?seed={req.author_username or 'operator'}"
 
     post_payload = {
         "id": post_id,
         "platform": req.platform or "X",
-        "text": req.text,
-        "media_type": req.media_type or ("photo" if req.media_url and any(req.media_url.lower().endswith(ext) for ext in [".jpg", ".jpeg", ".png", ".gif", ".webp"]) else ("video" if req.media_url else "none")),
-        "media_url": req.media_url,
+        "text": final_text,
+        "media_type": media_type,
+        "media_url": media_url,
         "author": {
-            "name": req.author_name or "Operator",
+            "name": req.author_name or "Intelligence Operator",
             "username": req.author_username or "operator",
             "bio": "Aetheria Intelligence Contributor",
             "location": req.location or "Global Station",

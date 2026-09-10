@@ -153,6 +153,7 @@
         <!-- Platform Filters -->
         <div class="feed-filter-bar">
           <button class="filter-btn platform-filter-btn active" data-platform="all"><i class="fas fa-globe"></i> All Feeds</button>
+          <button class="filter-btn platform-filter-btn" data-platform="my_posts" style="border-color: rgba(0, 240, 255, 0.4); background: rgba(0, 240, 255, 0.08); color: var(--neon-cyan);"><i class="fas fa-user-astronaut"></i> My Posts (<span id="my-posts-count">0</span>)</button>
           <button class="filter-btn platform-filter-btn" data-platform="X"><i class="fa-brands fa-x-twitter"></i> X (Twitter)</button>
           <button class="filter-btn platform-filter-btn" data-platform="Telegram"><i class="fa-brands fa-telegram"></i> Telegram</button>
           <button class="filter-btn platform-filter-btn" data-platform="Reddit"><i class="fa-brands fa-reddit"></i> Reddit</button>
@@ -264,6 +265,7 @@
               <option value="YouTube">YouTube</option>
               <option value="Reddit">Reddit</option>
               <option value="Telegram">Telegram</option>
+              <option value="Facebook">Facebook</option>
             </select>
           </div>
           <span id="creator-char-counter" style="color: var(--text-dim); font-family: var(--font-mono); font-size: 0.75rem;">0 / 500</span>

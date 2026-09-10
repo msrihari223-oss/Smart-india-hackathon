@@ -1761,8 +1761,8 @@ class RealUserStreamFetcher:
                     },
                     "engagement": {"likes": random.randint(450, 15000), "shares": random.randint(80, 2400), "replies": random.randint(20, 480)},
                     "interaction_type": "channel_post",
-                    "media_type": "photo" if random.random() > 0.4 else "none",
-                    "media_url": "https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=1200&q=80" if random.random() > 0.4 else None
+                    "media_type": "none",
+                    "media_url": None
                 }
             elif target_platform == "YouTube" and self.youtube_channels:
                 ch = random.choice(self.youtube_channels)
@@ -1781,8 +1781,8 @@ class RealUserStreamFetcher:
                     },
                     "engagement": {"likes": random.randint(1200, 65000), "shares": random.randint(200, 4500), "replies": random.randint(80, 2100)},
                     "interaction_type": "video_broadcast",
-                    "media_type": "video",
-                    "media_url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4"
+                    "media_type": "none",
+                    "media_url": None
                 }
             elif target_platform == "Instagram" and self.instagram_creators:
                 creator = random.choice(self.instagram_creators)
@@ -1802,8 +1802,8 @@ class RealUserStreamFetcher:
                     },
                     "engagement": {"likes": random.randint(5000, 180000), "shares": random.randint(400, 12000), "replies": random.randint(200, 3500)},
                     "interaction_type": "media_post",
-                    "media_type": "photo",
-                    "media_url": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=1200&q=80"
+                    "media_type": "none",
+                    "media_url": None
                 }
             elif target_platform == "Reddit" and self.reddit_real_users:
                 u = random.choice(self.reddit_real_users)
@@ -1823,8 +1823,8 @@ class RealUserStreamFetcher:
                     },
                     "engagement": {"likes": random.randint(300, 14000), "shares": random.randint(50, 1200), "replies": random.randint(40, 2500)},
                     "interaction_type": "reddit_thread",
-                    "media_type": "photo" if random.random() > 0.5 else "none",
-                    "media_url": "https://images.unsplash.com/photo-1550751827-4bd374c3f58b?auto=format&fit=crop&w=1200&q=80" if random.random() > 0.5 else None
+                    "media_type": "none",
+                    "media_url": None
                 }
             elif target_platform == "Facebook" and self.facebook_real_users:
                 fb_user = random.choice(self.facebook_real_users)
@@ -1844,8 +1844,8 @@ class RealUserStreamFetcher:
                     },
                     "engagement": {"likes": random.randint(2500, 120000), "shares": random.randint(300, 15000), "replies": random.randint(150, 4500)},
                     "interaction_type": "post",
-                    "media_type": "video" if random.random() > 0.5 else "none",
-                    "media_url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4" if random.random() > 0.5 else None
+                    "media_type": "none",
+                    "media_url": None
                 }
             else: # X (Twitter)
                 x_creators = [
@@ -1881,8 +1881,8 @@ class RealUserStreamFetcher:
                     },
                     "engagement": {"likes": random.randint(45, 3800), "shares": random.randint(12, 750), "replies": random.randint(4, 210)},
                     "interaction_type": "post",
-                    "media_type": "photo" if random.random() > 0.5 else "none",
-                    "media_url": "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&w=1200&q=80" if random.random() > 0.5 else None
+                    "media_type": "none",
+                    "media_url": None
                 }
 
         author = raw["author"]

@@ -19,6 +19,13 @@ class App {
     this.currentRealUserPlatform = 'all';
     this.realUserSearch = '';
     this.activeCommentPost = null;
+    this.userCreatedPosts = [];
+    try {
+      const saved = localStorage.getItem('sma_user_posts');
+      if (saved) {
+        this.userCreatedPosts = JSON.parse(saved);
+      }
+    } catch (e) {}
   }
 
   async init() {
@@ -32,6 +39,7 @@ class App {
     await this.loadInitialData();
     await this.loadRealUsers();
     await this.loadInfluencerRankings();
+    this.updateMyPostsCountBadge();
     this.connectWebSocket();
 
     // Periodic Database Health Monitoring
@@ -363,8 +371,30 @@ class App {
 
     // Cancel / Close Handlers
     const returnToFeed = () => {
+      // 1. Set filter button to My Posts so user's new dispatch & photos are prominently displayed
+      document.querySelectorAll('.platform-filter-btn').forEach(b => {
+        b.classList.toggle('active', b.getAttribute('data-platform') === 'my_posts');
+      });
+      this.currentPlatformFilter = 'my_posts';
+
+      // 2. Switch tab to view-feed
+      document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
       const feedTab = document.querySelector('.nav-tab[data-target="view-feed"]');
-      if (feedTab) feedTab.click();
+      if (feedTab) feedTab.classList.add('active');
+
+      document.querySelectorAll('.view-section').forEach(s => s.classList.remove('active'));
+      const feedSec = document.getElementById('view-feed');
+      if (feedSec) feedSec.classList.add('active');
+
+      // 3. Render feed with user's posts
+      this.refreshFeed();
+
+      // 4. Scroll to top of feed smoothly
+      setTimeout(() => {
+        const feedList = document.getElementById('live-stream-feed');
+        if (feedList) feedList.scrollTop = 0;
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }, 60);
     };
 
     if (btnPostCancel) btnPostCancel.addEventListener('click', returnToFeed);
@@ -377,16 +407,18 @@ class App {
       });
     }
 
-    const postTextInput = document.getElementById('creator-post-text');
-    const charCounter = document.getElementById('creator-char-counter');
-    if (postTextInput && charCounter) {
-      postTextInput.addEventListener('input', (e) => {
+    // Studio Post Character Counter Listener
+    const creatorPostText = document.getElementById('creator-post-text');
+    const creatorCharCounter = document.getElementById('creator-char-counter');
+    if (creatorPostText && creatorCharCounter) {
+      creatorPostText.addEventListener('input', (e) => {
         const len = e.target.value.length;
-        charCounter.innerText = `${len} / 500`;
-        charCounter.style.color = len > 450 ? '#f43f5e' : 'var(--text-dim)';
+        creatorCharCounter.innerText = `${len} / 500`;
+        creatorCharCounter.style.color = len > 450 ? '#f43f5e' : 'var(--text-dim)';
       });
     }
 
+    // ================= Studio Broadcast Post Handler =================
     if (btnBroadcast) {
       btnBroadcast.addEventListener('click', async () => {
         const text = (document.getElementById('creator-post-text')?.value || '').trim();
@@ -409,18 +441,11 @@ class App {
         btnBroadcast.disabled = true;
         btnBroadcast.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Posting...';
 
-        // Retrieve logged in user info if available
-        let authorUsername = 'operator';
-        let authorName = 'Intelligence Operator';
-        let authorAvatar = null;
-        let authorRole = 'Analyst';
-
-        if (window.authController && window.authController.user) {
-          authorUsername = window.authController.user.username || 'operator';
-          authorName = window.authController.user.full_name || 'Operator';
-          authorAvatar = window.authController.user.avatar || null;
-          authorRole = window.authController.user.role || 'Analyst';
-        }
+        let u = window.authController?.user || {};
+        let authorUsername = u.username || 'operator';
+        let authorName = u.full_name || 'Intelligence Operator';
+        let authorAvatar = u.avatar || null;
+        let authorRole = u.role || 'Analyst';
 
         try {
           const res = await ApiClient.createPost({
@@ -435,7 +460,22 @@ class App {
           });
 
           if (res.success && res.post) {
-            this.prependPostCard(res.post);
+            this.addUserPost(res.post);
+            this.showToast('🚀 Broadcast Published!', `Your post is live on ${res.post.platform} feed and saved to database.`, 'success');
+
+            // Increment KPI counter
+            const kpiTotalEl = document.getElementById('kpi-total-posts');
+            if (kpiTotalEl) {
+              const currentTotal = parseInt((kpiTotalEl.innerText || '0').replace(/,/g, ''), 10) || 0;
+              kpiTotalEl.innerText = (currentTotal + 1).toLocaleString();
+            }
+
+            // Reset studio text
+            const postTextEl = document.getElementById('creator-post-text');
+            if (postTextEl) postTextEl.value = '';
+            const charCounterEl = document.getElementById('creator-char-counter');
+            if (charCounterEl) charCounterEl.innerText = '0 / 500';
+
             btnBroadcast.innerHTML = '<i class="fas fa-check-circle" style="color: #10b981;"></i> Posted!';
             
             // Auto-switch to Live Feed tab so user immediately sees their photo/video post!
@@ -443,7 +483,13 @@ class App {
               returnToFeed();
               btnBroadcast.disabled = false;
               btnBroadcast.innerHTML = '<i class="fas fa-paper-plane"></i> Post';
+              const feedEl = document.getElementById('view-feed');
+              if (feedEl) feedEl.scrollIntoView({ behavior: 'smooth' });
             }, 500);
+          } else {
+            alert('Failed to post: ' + (res.error || 'Unknown error'));
+            btnBroadcast.disabled = false;
+            btnBroadcast.innerHTML = '<i class="fas fa-paper-plane"></i> Post';
           }
         } catch (err) {
           alert('Error creating post: ' + err.message);
@@ -791,16 +837,96 @@ class App {
     }
   }
 
+  showToast(title, message, type = 'info') {
+    const existing = document.querySelector('.sma-toast');
+    if (existing) existing.remove();
+
+    const toast = document.createElement('div');
+    toast.className = 'sma-toast';
+    const icon = type === 'success' ? 'fa-check-circle' : 'fa-info-circle';
+    const iconColor = type === 'success' ? 'var(--neon-emerald)' : 'var(--neon-cyan)';
+
+    toast.innerHTML = `
+      <i class="fas ${icon}" style="font-size: 1.25rem; color: ${iconColor};"></i>
+      <div style="flex: 1;">
+        <div style="font-weight: 700; color: #fff; font-size: 0.9rem;">${title}</div>
+        <div style="font-size: 0.78rem; color: var(--text-muted);">${message}</div>
+      </div>
+      <button class="btn-icon" style="color: var(--text-muted); padding: 2px 6px; cursor: pointer;" onclick="this.parentElement.remove();"><i class="fas fa-times"></i></button>
+    `;
+
+    document.body.appendChild(toast);
+    setTimeout(() => {
+      toast.style.opacity = '0';
+      toast.style.transform = 'translateY(15px)';
+      setTimeout(() => toast.remove(), 300);
+    }, 4500);
+  }
+
+  addUserPost(post) {
+    if (!post) return;
+    const exists = this.userCreatedPosts.find(p => p.id === post.id);
+    if (!exists) {
+      this.userCreatedPosts.unshift(post);
+      try {
+        localStorage.setItem('sma_user_posts', JSON.stringify(this.userCreatedPosts.slice(0, 50)));
+      } catch (e) {}
+    }
+    
+    const feedExists = this.activeFeedPosts.find(p => p.id === post.id);
+    if (!feedExists) {
+      this.activeFeedPosts.unshift(post);
+    }
+
+    this.renderUserPinnedPosts();
+    this.updateMyPostsCountBadge();
+    
+    if (this.matchesCurrentFilters(post)) {
+      this.prependPostCard(post, true);
+    }
+  }
+
+  renderUserPinnedPosts() {
+    const container = document.getElementById('user-pinned-posts-container');
+    const list = document.getElementById('user-pinned-posts-list');
+    const badgeCount = document.getElementById('user-pinned-badge-count');
+    if (!container || !list) return;
+
+    if (!this.userCreatedPosts || this.userCreatedPosts.length === 0) {
+      container.style.display = 'none';
+      return;
+    }
+
+    container.style.display = 'block';
+    if (badgeCount) {
+      badgeCount.innerText = `${this.userCreatedPosts.length} ${this.userCreatedPosts.length === 1 ? 'Dispatch' : 'Dispatches'}`;
+    }
+
+    list.innerHTML = '';
+    this.userCreatedPosts.slice(0, 5).forEach(post => {
+      const card = this.createPostElement(post);
+      card.classList.add('user-post-card');
+      list.appendChild(card);
+    });
+  }
+
+  updateMyPostsCountBadge() {
+    const el = document.getElementById('my-posts-count');
+    if (el) {
+      el.innerText = (this.userCreatedPosts || []).length;
+    }
+  }
+
   handleLivePost(post, kpis, trends) {
     if (kpis) this.updateKPIs(kpis);
     if (trends) this.renderTrends(trends);
 
-    // Add post to active feed if matching filter
+    // Add post to active feed
     this.activeFeedPosts.unshift(post);
     if (this.activeFeedPosts.length > 50) this.activeFeedPosts.pop();
 
     if (this.matchesCurrentFilters(post)) {
-      this.prependPostCard(post);
+      this.prependPostCard(post, false);
     }
 
     // Update emotion donut live
@@ -810,10 +936,43 @@ class App {
   }
 
   matchesCurrentFilters(post) {
-    if (this.currentPlatformFilter !== 'all' && post.platform.toLowerCase() !== this.currentPlatformFilter.toLowerCase()) {
+    if (!post) return false;
+    if (this.currentPlatformFilter === 'my_posts') {
+      const currentUsername = (window.authController?.user?.username || 'operator').toLowerCase();
+      const authorUsername = (post.author?.username || '').toLowerCase();
+      return (authorUsername === currentUsername) || (post.id && post.id.startsWith('post_usr_')) || this.userCreatedPosts.some(u => u.id === post.id);
+    }
+    if (this.currentPlatformFilter !== 'all' && (post.platform || '').toLowerCase() !== this.currentPlatformFilter.toLowerCase()) {
       return false;
     }
     return true;
+  }
+
+  getDisplayPosts() {
+    let posts = [...this.activeFeedPosts];
+    // Merge in any userCreatedPosts
+    this.userCreatedPosts.forEach(up => {
+      if (!posts.some(p => p.id === up.id)) {
+        posts.unshift(up);
+      }
+    });
+
+    if (this.currentPlatformFilter === 'my_posts') {
+      const currentUsername = (window.authController?.user?.username || 'operator').toLowerCase();
+      return posts.filter(p => (p.author?.username || '').toLowerCase() === currentUsername || (p.id && p.id.startsWith('post_usr_')) || this.userCreatedPosts.some(u => u.id === p.id));
+    }
+
+    if (this.currentPlatformFilter !== 'all') {
+      const targetPlat = this.currentPlatformFilter.toLowerCase();
+      return posts.filter(p => (p.platform || '').toLowerCase() === targetPlat);
+    }
+
+    return posts;
+  }
+
+  refreshFeed() {
+    const posts = this.getDisplayPosts();
+    this.renderFeed(posts);
   }
 
   updateKPIs(kpis) {
@@ -833,17 +992,43 @@ class App {
     const list = document.getElementById('live-stream-feed');
     if (!list) return;
     list.innerHTML = '';
-    posts.forEach(p => list.appendChild(this.createPostElement(p)));
+
+    if (this.currentPlatformFilter === 'my_posts' && (!posts || posts.length === 0)) {
+      list.innerHTML = `
+        <div style="text-align: center; padding: 3.5rem 1.5rem; color: var(--text-muted); background: rgba(15, 23, 42, 0.4); border-radius: 12px; border: 1px dashed rgba(0, 240, 255, 0.25);">
+          <i class="fas fa-camera-retro" style="font-size: 2.2rem; color: var(--neon-cyan); margin-bottom: 0.85rem; display: block;"></i>
+          <div style="font-weight: 700; color: #fff; font-size: 1rem; margin-bottom: 0.35rem;">No Published Posts Yet</div>
+          <div style="font-size: 0.82rem; margin-bottom: 1.25rem; color: var(--text-muted);">When you post photos, videos, or dispatches, they will be listed here.</div>
+          <button type="button" class="btn-post-submit-gradient" onclick="document.querySelector('.nav-tab[data-target=\\'view-media-broadcast\\']')?.click();" style="font-size: 0.82rem; padding: 0.45rem 1.25rem;">
+            <i class="fas fa-plus"></i> Create New Post
+          </button>
+        </div>
+      `;
+      return;
+    }
+
+    (posts || []).forEach(p => list.appendChild(this.createPostElement(p)));
   }
 
-  prependPostCard(post) {
+  prependPostCard(post, isUserCreated = false) {
     const list = document.getElementById('live-stream-feed');
     if (!list) return;
+
+    // Check if card with this ID already rendered
+    const existing = document.getElementById(`feed-card-${post.id}`);
+    if (existing) return;
+
     const card = this.createPostElement(post);
+    card.id = `feed-card-${post.id}`;
+    if (isUserCreated) {
+      card.classList.add('user-post-card');
+      card.style.borderColor = 'var(--neon-cyan)';
+      card.style.boxShadow = '0 0 25px rgba(0, 240, 255, 0.4)';
+    }
     list.insertBefore(card, list.firstChild);
 
-    // Keep max 40 in DOM
-    if (list.children.length > 40) {
+    // Keep max 50 in DOM
+    if (list.children.length > 50) {
       list.removeChild(list.lastChild);
     }
   }
@@ -851,6 +1036,11 @@ class App {
   createPostElement(post) {
     const card = document.createElement('div');
     card.className = 'post-card';
+    
+    const isUserPost = (post.author?.username === (window.authController?.user?.username || 'operator') || (post.id && post.id.startsWith('post_usr_')) || (this.userCreatedPosts && this.userCreatedPosts.some(u => u.id === post.id)));
+    if (isUserPost) {
+      card.classList.add('user-post-card');
+    }
     
     const sent = post.sentiment || {};
     const sarcasm = sent.sarcasm || {};
@@ -890,12 +1080,24 @@ class App {
           </div>
         </div>
         <div style="display:flex; align-items:center; gap: 0.4rem;">
+          ${isUserPost
+            ? `<span class="kpi-badge" style="background: rgba(0, 240, 255, 0.2); color: var(--neon-cyan); border: 1px solid rgba(0, 240, 255, 0.6); font-size: 0.7rem; padding: 0.18rem 0.5rem; font-weight: 700; box-shadow: 0 0 10px rgba(0,240,255,0.3);"><i class="fas fa-user-astronaut"></i> Your Post</span>`
+            : ''
+          }
           <span class="post-platform-tag ${platformClass}"><i class="${platIcon}"></i> ${post.platform}</span>
           <span class="kpi-badge badge-emerald" style="font-size: 0.68rem; padding: 0.15rem 0.45rem;"><i class="fas fa-check-circle"></i> Live Verified</span>
           <span style="font-size: 0.72rem; color: var(--text-muted); font-family: var(--font-mono);">${post.timestamp_iso || 'Just now'}</span>
         </div>
       </div>
       <div class="post-body">${post.text}</div>
+      ${(isUserPost && post.media_url) ? `
+        <div style="margin: 0.65rem 0; border-radius: 10px; overflow: hidden; max-height: 280px; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.08);">
+          ${(post.media_type === 'video' || post.media_url.endsWith('.mp4') || post.media_url.endsWith('.webm') || post.media_url.startsWith('data:video'))
+            ? `<video src="${post.media_url}" controls playsinline style="width: 100%; max-height: 280px; object-fit: contain; display: block;"></video>`
+            : `<img src="${post.media_url}" alt="Attachment" style="width: 100%; max-height: 280px; object-fit: cover; display: block;" onerror="this.parentElement.style.display='none'"/>`
+          }
+        </div>
+      ` : ''}
       <div class="post-intel-badges">
         <span class="intel-badge" style="color: ${sent.valence > 0.1 ? '#10b981' : (sent.valence < -0.1 ? '#f43f5e' : '#94a3b8')};">
           <i class="fas fa-heart"></i> ${sent.sentiment_label || 'Neutral'} (${sent.valence || 0})
