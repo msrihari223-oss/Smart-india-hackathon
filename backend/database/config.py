@@ -61,11 +61,12 @@ def init_engine(db_url: Optional[str] = None):
     try:
         engine = create_engine(
             DATABASE_URL,
-            pool_size=10,
-            max_overflow=20,
+            pool_size=15,
+            max_overflow=25,
             pool_pre_ping=True,
-            pool_recycle=1800,
-            connect_args={"connect_timeout": 15}
+            pool_recycle=1200,
+            pool_timeout=5,
+            connect_args={"connect_timeout": 5}
         )
         SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
         return engine

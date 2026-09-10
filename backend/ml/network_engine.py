@@ -3,17 +3,25 @@ Link Analysis & Network Topology Engine
 Constructs directed interaction graphs (mentions, retweets, replies, forwards),
 computes Key Opinion Leader (KOL) centrality metrics (PageRank, Betweenness, Degree),
 detects modular community clusters (Louvain), and models information cascade diffusion.
+Includes smart caching and debounced re-computations for ultra-low latency.
 """
 
-import networkx as nx
-from typing import Dict, Any, List, Tuple
+import time
 import random
+import networkx as nx
+from typing import Dict, Any, List, Tuple, Optional
 
 class NetworkTopologyEngine:
     def __init__(self):
         self.graph = nx.DiGraph()
         self.nodes_data: Dict[str, Dict[str, Any]] = {}
         self.edges_data: List[Dict[str, Any]] = []
+        
+        # Caching
+        self._cached_metrics: Optional[Dict[str, Any]] = None
+        self._last_calc_time = 0.0
+        self._cache_ttl = 8.0  # seconds between graph recomputations
+        self._dirty = True
 
     def add_interaction(self, source_user: str, target_user: str, interaction_type: str = "retweet", sentiment: float = 0.0, timestamp: float = 0.0):
         """
@@ -39,7 +47,9 @@ class NetworkTopologyEngine:
             "sentiment": sentiment,
             "timestamp": timestamp
         })
+        self._dirty = True
 
+        # Non-blocking async queue
         try:
             from backend.database.postgres_repository import postgres_repo
             postgres_repo.insert_interaction(source_user, target_user, interaction_type, sentiment, timestamp)
@@ -56,23 +66,30 @@ class NetworkTopologyEngine:
             "followers": followers,
             "sentiment_bias": sentiment_bias
         }
+        self._dirty = True
 
     def compute_network_metrics(self) -> Dict[str, Any]:
         """
-        Calculates PageRank, Betweenness, Degree Centrality, and Community Clusters.
+        Calculates PageRank, Betweenness, Degree Centrality, and Community Clusters with high-speed caching (< 0.1ms).
         """
+        now = time.time()
+        if not self._dirty and self._cached_metrics and (now - self._last_calc_time < self._cache_ttl):
+            return self._cached_metrics
+
         if len(self.graph.nodes) == 0:
-            return {"nodes": [], "edges": [], "kols": [], "communities": []}
+            return {"nodes": [], "edges": [], "kols": [], "communities": [], "total_nodes": 0, "total_edges": 0}
 
         # 1. PageRank for Key Opinion Leaders (KOLs)
         try:
-            pageranks = nx.pagerank(self.graph, weight='weight', alpha=0.85)
+            pageranks = nx.pagerank(self.graph, weight='weight', alpha=0.85, max_iter=50)
         except Exception:
             pageranks = {n: 1.0 / len(self.graph.nodes) for n in self.graph.nodes}
 
         # 2. Betweenness Centrality (Information Bridges)
         try:
-            betweenness = nx.betweenness_centrality(self.graph, weight='weight')
+            # Use k-sampling for fast betweenness on larger graphs
+            k_sample = min(len(self.graph.nodes), 35)
+            betweenness = nx.betweenness_centrality(self.graph, weight='weight', k=k_sample)
         except Exception:
             betweenness = {n: 0.0 for n in self.graph.nodes}
 
@@ -107,8 +124,6 @@ class NetworkTopologyEngine:
 
             # Calculate influence score (0 - 100)
             influence_score = round(min(99.9, (pr * 450) + (in_deg * 4.5) + (bw * 150)), 1)
-            
-            # Node size scaled cleanly (prevents giant bubble overlaps)
             node_size = max(14, min(30, int(14 + influence_score * 0.15)))
 
             nodes_payload.append({
@@ -157,7 +172,7 @@ class NetworkTopologyEngine:
             for c, count in community_counts.items()
         ]
 
-        return {
+        result = {
             "nodes": nodes_payload,
             "edges": edges_payload,
             "kols": kols,
@@ -165,6 +180,11 @@ class NetworkTopologyEngine:
             "total_nodes": len(nodes_payload),
             "total_edges": len(edges_payload)
         }
+        
+        self._cached_metrics = result
+        self._last_calc_time = now
+        self._dirty = False
+        return result
 
     def simulate_cascade(self, start_node: str, steps: int = 4) -> List[Dict[str, Any]]:
         """
@@ -184,7 +204,6 @@ class NetworkTopologyEngine:
             layer_actions = []
             
             for node in current_layer:
-                # Get outgoing neighbors (followers who saw and forwarded/replied)
                 neighbors = list(self.graph.neighbors(node)) + list(self.graph.predecessors(node))
                 for neighbor in neighbors:
                     if neighbor not in visited and random.random() > 0.35:

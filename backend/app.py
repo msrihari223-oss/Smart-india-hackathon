@@ -163,36 +163,37 @@ async def get_influencer_rankings(
     net_data = network_engine.compute_network_metrics()
     net_kols = {k["id"]: k for k in net_data.get("kols", [])}
 
+    # Use indexed user list efficiently
+    user_pool = list(real_user_manager.users.values())
+    if len(user_pool) > 600:
+        user_pool = user_pool[:600]
+
     all_creators = []
-    # Index creators from real user manager
-    for u in list(real_user_manager.users.values()):
+    country_keywords = [
+        ("India", ["India", "Bengaluru", "Mumbai", "Delhi", "Hyderabad", "Pune", "Chennai", "Kolkata"]),
+        ("United Kingdom", ["UK", "London", "Manchester", "Cambridge", "Oxford", "Edinburgh"]),
+        ("Germany", ["Germany", "Berlin", "Munich", "Frankfurt"]),
+        ("Singapore", ["Singapore"]),
+        ("Canada", ["Canada", "Toronto", "Vancouver"]),
+        ("Japan", ["Japan", "Tokyo", "Kyoto"]),
+        ("Australia", ["Australia", "Sydney", "Melbourne"]),
+        ("France", ["France", "Paris"])
+    ]
+
+    for u in user_pool:
         username = u.get("username", "")
         followers = u.get("followers", 1000)
         net_info = net_kols.get(username, {})
         base_influence = net_info.get("influence_score")
         if base_influence is None:
-            # Deterministic influence score from followers and network weight
             base_influence = round(min(99.4, max(42.0, (followers / 4500000.0) * 45 + 52.0)), 1)
 
         location = u.get("location", "Global")
-        # Normalize country detection
         country_name = "United States"
-        if any(c in location for c in ["India", "Bengaluru", "Mumbai", "Delhi", "Hyderabad", "Pune", "Chennai", "Kolkata"]):
-            country_name = "India"
-        elif any(c in location for c in ["UK", "London", "Manchester", "Cambridge", "Oxford", "Edinburgh"]):
-            country_name = "United Kingdom"
-        elif any(c in location for c in ["Germany", "Berlin", "Munich", "Frankfurt"]):
-            country_name = "Germany"
-        elif "Singapore" in location:
-            country_name = "Singapore"
-        elif any(c in location for c in ["Canada", "Toronto", "Vancouver"]):
-            country_name = "Canada"
-        elif any(c in location for c in ["Japan", "Tokyo", "Kyoto"]):
-            country_name = "Japan"
-        elif any(c in location for c in ["Australia", "Sydney", "Melbourne"]):
-            country_name = "Australia"
-        elif any(c in location for c in ["France", "Paris"]):
-            country_name = "France"
+        for c_name, kw_list in country_keywords:
+            if any(k in location for k in kw_list):
+                country_name = c_name
+                break
 
         all_creators.append({
             "id": username,
@@ -216,11 +217,14 @@ async def get_influencer_rankings(
     # Apply filters
     res = all_creators
     if platform and platform.lower() != "all":
-        res = [c for c in res if c["platform"].lower() == platform.lower()]
+        p_low = platform.lower()
+        res = [c for c in res if c["platform"].lower() == p_low]
     if country and country.lower() != "all":
-        res = [c for c in res if c["country"].lower() == country.lower()]
+        c_low = country.lower()
+        res = [c for c in res if c["country"].lower() == c_low]
     if category and category.lower() != "all":
-        res = [c for c in res if category.lower() in c["category"].lower()]
+        cat_low = category.lower()
+        res = [c for c in res if cat_low in c["category"].lower()]
     if search:
         q = search.lower()
         res = [c for c in res if q in c["name"].lower() or q in c["username"].lower() or q in c["category"].lower() or q in c["location"].lower()]
@@ -233,7 +237,6 @@ async def get_influencer_rankings(
     else:
         res.sort(key=lambda x: (x["influence_score"], x["followers"]), reverse=True)
 
-    # Assign rank numbers
     ranked_list = []
     for rank_num, creator in enumerate(res[:limit], 1):
         creator_copy = dict(creator)
@@ -411,12 +414,7 @@ async def create_user_post(req: CreatePostRequest):
 
 @app.get("/api/posts/{post_id}/comments")
 async def get_post_comments(post_id: str):
-    """Retrieve all comments on a post"""
-    if postgres_repo.is_connected:
-        comments = postgres_repo.get_comments(post_id)
-        if comments:
-            return {"post_id": post_id, "comments": comments}
-
+    """Retrieve all comments on a post with instant lookup"""
     comments = timeline_db.get_comments(post_id)
     return {"post_id": post_id, "comments": comments}
 
@@ -717,22 +715,6 @@ async def control_stream(req: StreamControlRequest):
 # ----------------- PostgreSQL Database Endpoints -----------------
 from backend.database.postgres_repository import postgres_repo
 from backend.database.init_db import create_database_if_not_exists, apply_schema_and_tables, sync_real_users_to_postgres
-
-@app.get("/api/db/health")
-async def get_db_health():
-    """Retrieve PostgreSQL connection state, active tables, and records count"""
-    return postgres_repo.check_health()
-
-@app.post("/api/db/reconnect")
-async def reconnect_db(db_url: Optional[str] = Query(None)):
-    """Reconnect or update PostgreSQL connection URL on-demand and sync tables"""
-    connected = postgres_repo.reconnect(db_url)
-    if connected:
-        sync_real_users_to_postgres()
-    return {
-        "status": "connected" if connected else "offline",
-        "health": postgres_repo.check_health()
-    }
 
 @app.post("/api/db/create")
 async def create_and_init_db(db_url: Optional[str] = Query(None)):

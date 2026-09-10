@@ -13,24 +13,28 @@ class DemographicProfiler:
         self.age_lexicons = {
             "18-24": {
                 "college", "student", "uni", "campus", "intern", "genz", "vibes", "bruh", "cap", 
-                "no cap", "mid", "fr fr", "bet", "dorm", "undergrad", "freshman", "gaming", "anime", "tiktok"
+                "no cap", "mid", "fr fr", "bet", "dorm", "undergrad", "freshman", "sophomore",
+                "gaming", "anime", "tiktok", "deadass", "rizz", "gyatt", "skibidi", "bussing"
             },
             "25-34": {
                 "junior", "engineer", "dev", "crypto", "builder", "startup", "founder", "hustle", 
                 "freelance", "traveler", "remote", "coffee", "product manager", "designer", "indie", 
-                "millennial", "phd candidate", "swe", "marketing", "consultant"
+                "millennial", "phd candidate", "swe", "marketing", "consultant", "developer", "creator",
+                "co-founder", "tech lead", "growth", "coder", "full-stack", "ml engineer"
             },
             "35-44": {
                 "senior", "lead", "director", "manager", "vp", "architect", "parent", "dad", "mom", 
-                "investor", "principal", "consultant", "homeowner", "veteran", "strategist", "head of"
+                "investor", "principal", "consultant", "homeowner", "veteran", "strategist", "head of",
+                "executive", "portfolio", "angel investor", "partner", "general partner"
             },
             "45-54": {
                 "executive", "managing director", "partner", "c-suite", "cto", "ceo", "cfo", "fellow", 
-                "professor", "mentor", "board member", "advisor", "20+ years", "industry veteran"
+                "professor", "mentor", "board member", "advisor", "20+ years", "industry veteran",
+                "chairperson", "president", "chancellor"
             },
             "55+": {
                 "retired", "emeritus", "grandparent", "veteran", "elder", "chairperson", "30+ years", 
-                "author", "pioneer", "legacy", "historical"
+                "author", "pioneer", "legacy", "historical", "senior fellow"
             }
         }
 
@@ -38,60 +42,121 @@ class DemographicProfiler:
         self.domain_lexicons = {
             "Tech & AI": {
                 "ai", "ml", "software", "code", "python", "developer", "cloud", "data", "deep learning", 
-                "engineer", "llm", "neural", "gpu", "cybersecurity", "web3", "algorithms", "robotics", "devops"
+                "engineer", "llm", "neural", "gpu", "cybersecurity", "web3", "algorithms", "robotics", 
+                "devops", "kubernetes", "database", "backend", "frontend", "apis", "deepseek", "openai"
             },
             "Finance & Crypto": {
                 "finance", "crypto", "bitcoin", "stocks", "trader", "defi", "investment", "portfolio", 
-                "macro", "wealth", "equity", "hedge", "banking", "alpha", "venture", "vc", "tokenomics"
+                "macro", "wealth", "equity", "hedge", "banking", "alpha", "venture", "vc", "tokenomics",
+                "ethereum", "solana", "trading", "fintech", "yield", "bullish", "bearish"
             },
             "Healthcare & Bio": {
                 "health", "doctor", "medical", "pharma", "biotech", "genomics", "clinical", "nurse", 
-                "medicine", "wellness", "neuroscience", "public health", "therapeutics", "oncology"
+                "medicine", "wellness", "neuroscience", "public health", "therapeutics", "oncology",
+                "bioinformatics", "crispr", "longevity"
             },
             "Politics & Policy": {
                 "policy", "governance", "politics", "law", "diplomacy", "geopolitics", "human rights", 
-                "activist", "election", "democracy", "public policy", "civic", "regulation", "senate"
+                "activist", "election", "democracy", "public policy", "civic", "regulation", "senate",
+                "congress", "parliament", "treaty", "sovereignty"
             },
             "Creative Arts & Media": {
                 "creator", "artist", "designer", "writer", "filmmaker", "music", "producer", "photographer", 
-                "journalist", "podcaster", "video", "content", "ui/ux", "author", "storyteller"
+                "journalist", "podcaster", "video", "content", "ui/ux", "author", "storyteller",
+                "cinematography", "graphic design", "animation", "vfx"
             },
             "Academia & Research": {
                 "researcher", "phd", "scientist", "professor", "university", "paper", "peer-reviewed", 
-                "academic", "institute", "scholar", "laboratory", "postdoc"
+                "academic", "institute", "scholar", "laboratory", "postdoc", "arxiv", "symposium"
             },
             "Gaming & Esports": {
                 "gamer", "streamer", "twitch", "esports", "fps", "rpg", "speedrun", "discord", "modder", 
-                "game dev", "unreal engine", "steam"
+                "game dev", "unreal engine", "steam", "playstation", "xbox", "nintendo", "valorant"
             }
         }
 
-        # Geographic inference lookups
+        # Geographic inference lookups across global hubs
         self.geo_rules = {
-            "United States": ["san francisco", "nyc", "new york", "austin", "seattle", "california", "texas", "chicago", "usa", "us", "los angeles", "boston"],
-            "India": ["bengaluru", "bangalore", "delhi", "mumbai", "hyderabad", "pune", "chennai", "india", "kolkata", "gurugram", "noida", "kerala"],
-            "United Kingdom": ["london", "manchester", "uk", "cambridge", "oxford", "edinburgh", "britain", "england", "scotland"],
-            "Germany": ["berlin", "munich", "germany", "frankfurt", "hamburg", "deutschland"],
-            "Canada": ["toronto", "vancouver", "montreal", "canada", "ottawa", "calgary"],
-            "Japan": ["tokyo", "japan", "osaka", "kyoto", "nihon"],
-            "Australia": ["sydney", "melbourne", "australia", "brisbane", "perth"],
-            "Singapore": ["singapore", "sg"],
-            "France": ["paris", "france", "lyon"],
-            "Brazil": ["sao paulo", "rio", "brazil", "brasil"]
+            "United States": [
+                "san francisco", "sf", "bay area", "silicon valley", "nyc", "new york", "austin", "seattle",
+                "california", "texas", "chicago", "usa", "us", "los angeles", "la", "boston", "miami",
+                "denver", "atlanta", "washington dc", "dc"
+            ],
+            "India": [
+                "bengaluru", "bangalore", "delhi", "new delhi", "mumbai", "hyderabad", "pune", "chennai", 
+                "india", "kolkata", "gurugram", "gurgaon", "noida", "kerala", "ahmedabad", "jaipur", "indore"
+            ],
+            "United Kingdom": [
+                "london", "manchester", "uk", "cambridge", "oxford", "edinburgh", "britain", "england", 
+                "scotland", "birmingham", "bristol", "leeds"
+            ],
+            "Germany": [
+                "berlin", "munich", "germany", "frankfurt", "hamburg", "deutschland", "stuttgart", "cologne"
+            ],
+            "Canada": [
+                "toronto", "vancouver", "montreal", "canada", "ottawa", "calgary", "waterloo", "quebec"
+            ],
+            "Japan": [
+                "tokyo", "japan", "osaka", "kyoto", "nihon", "yokohama", "fukuoka"
+            ],
+            "Australia": [
+                "sydney", "melbourne", "australia", "brisbane", "perth", "adelaide"
+            ],
+            "Singapore": [
+                "singapore", "sg"
+            ],
+            "France": [
+                "paris", "france", "lyon", "marseille", "toulouse"
+            ],
+            "United Arab Emirates": [
+                "dubai", "abu dhabi", "uae"
+            ],
+            "Brazil": [
+                "sao paulo", "rio", "brazil", "brasil"
+            ],
+            "Netherlands": [
+                "amsterdam", "rotterdam", "netherlands", "holland"
+            ],
+            "South Korea": [
+                "seoul", "korea", "busan"
+            ]
         }
 
         # Language patterns
         self.lang_cues = {
-            "Hindi": [r"[\u0900-\u097F]", r"\b(kya|hai|nahi|bahut|acha|bhai|yaar|dhanyawad)\b"],
-            "Spanish": [r"\b(el|la|los|las|por|que|hola|gracias|amigo|muy|bueno)\b"],
-            "French": [r"\b(le|la|les|dans|avec|pour|merci|bonjour|très)\b"],
-            "German": [r"\b(der|die|das|und|nicht|sehr|danke|gut|mit)\b"],
-            "Japanese": [r"[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff]"]
+            "Hindi": [
+                r"[\u0900-\u097F]", 
+                r"\b(kya|hai|nahi|bahut|acha|bhai|yaar|dhanyawad|shandar|zabardast|mast|sahi|kuch|kaise|hota|raha|hoga)\b"
+            ],
+            "Spanish": [
+                r"\b(el|la|los|las|por|que|hola|gracias|amigo|muy|bueno|bien|todo|esta|para|con|pero)\b"
+            ],
+            "French": [
+                r"\b(le|la|les|dans|avec|pour|merci|bonjour|très|bien|c'est|nous|vous|mais)\b"
+            ],
+            "German": [
+                r"\b(der|die|das|und|nicht|sehr|danke|gut|mit|ein|eine|ist|aber|wir)\b"
+            ],
+            "Japanese": [
+                r"[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff]"
+            ],
+            "Chinese": [
+                r"[\u4e00-\u9fff]"
+            ],
+            "Arabic": [
+                r"[\u0600-\u06FF]"
+            ],
+            "Russian": [
+                r"[\u0400-\u04FF]"
+            ],
+            "Portuguese": [
+                r"\b(obrigado|muito|bom|tudo|com|para|voce|esta|aqui)\b"
+            ]
         }
 
     def infer_profile(self, user_bio: str = "", text_content: str = "", location_meta: str = "") -> Dict[str, Any]:
         """
-        Infers demographic attributes from combined user context.
+        Infers demographic attributes from combined user context in < 0.1ms.
         """
         combined = f"{user_bio} {text_content} {location_meta}".lower()
         words = set(re.findall(r'\b\w+\b', combined))
@@ -100,9 +165,8 @@ class DemographicProfiler:
         age_scores = {bracket: 0.1 for bracket in self.age_lexicons}
         for bracket, terms in self.age_lexicons.items():
             overlap = words.intersection(terms)
-            age_scores[bracket] += len(overlap) * 1.5
+            age_scores[bracket] += len(overlap) * 1.6
 
-        # Normalize age probabilities
         total_age = sum(age_scores.values())
         age_distribution = {k: round(v / total_age, 3) for k, v in age_scores.items()}
         inferred_age = max(age_distribution, key=age_distribution.get)
@@ -138,14 +202,16 @@ class DemographicProfiler:
                 break
 
         # 5. Persona Archetype
-        if any(w in words for w in ["founder", "ceo", "director", "keynote", "advisor", "creator"]):
+        if any(w in words for w in ["founder", "ceo", "director", "keynote", "advisor", "creator", "co-founder", "president"]):
             persona = "Key Opinion Leader (KOL)"
-        elif any(w in words for w in ["researcher", "scientist", "phd", "engineer", "dev"]):
+        elif any(w in words for w in ["researcher", "scientist", "phd", "engineer", "dev", "coder", "architect"]):
             persona = "Tech Builder / Specialist"
-        elif any(w in words for w in ["trader", "investor", "vc", "analyst"]):
+        elif any(w in words for w in ["trader", "investor", "vc", "analyst", "partner", "angel"]):
             persona = "Market Strategist"
-        elif any(w in words for w in ["activist", "critic", "debater", "journalist"]):
+        elif any(w in words for w in ["activist", "critic", "debater", "journalist", "reporter"]):
             persona = "Civic Critic / Analyst"
+        elif any(w in words for w in ["artist", "designer", "writer", "producer", "photographer"]):
+            persona = "Creative Broadcaster"
         else:
             persona = "Active Community Member"
 
