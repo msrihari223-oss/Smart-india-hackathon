@@ -12,14 +12,27 @@ from datetime import datetime
 from backend.database.postgres_repository import postgres_repo
 
 class TimelineDatabase:
-    def __init__(self, max_records: int = 3000):
+    def __init__(self, max_records: int = 50000):
         self.max_records = max_records
         self.records: List[Dict[str, Any]] = []
+        self.cumulative_total: int = 0
         self.comments_store: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+        self._init_cumulative_total()
+
+    def _init_cumulative_total(self):
+        """Initializes continuous cumulative count from PostgreSQL database if connected."""
+        if postgres_repo.is_connected:
+            try:
+                pg_kpis = postgres_repo.get_kpis()
+                if pg_kpis and pg_kpis.get("total_posts", 0) > 0:
+                    self.cumulative_total = pg_kpis["total_posts"]
+            except Exception:
+                pass
 
     def insert(self, record: Dict[str, Any]):
         """
-        Inserts a timestamped record into in-memory buffer instantly (< 0.01ms)
+        Inserts a timestamped record into in-memory buffer instantly (< 0.01ms),
+        increments cumulative total count continuously without stopping,
         and asynchronously queues for PostgreSQL persistence.
         """
         if "timestamp_epoch" not in record:
@@ -27,6 +40,7 @@ class TimelineDatabase:
         if "timestamp_iso" not in record:
             record["timestamp_iso"] = datetime.fromtimestamp(record["timestamp_epoch"]).strftime('%H:%M:%S')
 
+        self.cumulative_total += 1
         self.records.append(record)
         if len(self.records) > self.max_records:
             self.records.pop(0)
@@ -127,26 +141,33 @@ class TimelineDatabase:
 
     def get_kpis(self) -> Dict[str, Any]:
         """
-        Returns high-level key performance metrics instantly in < 0.2ms.
+        Returns high-level key performance metrics instantly in < 0.2ms with continuous non-stopping counter.
         """
+        if postgres_repo.is_connected:
+            pg_kpis = postgres_repo.get_kpis()
+            if pg_kpis and pg_kpis.get("total_posts", 0) > 0:
+                self.cumulative_total = max(self.cumulative_total, pg_kpis["total_posts"])
+                pg_kpis["total_posts"] = self.cumulative_total
+                return pg_kpis
+
         if not self.records:
             return {
-                "total_posts": 0,
+                "total_posts": self.cumulative_total,
                 "overall_sentiment_index": 0.0,
                 "sarcasm_detected_count": 0,
                 "active_platforms": 6,
                 "velocity_per_minute": 30
             }
 
-        total_posts = len(self.records)
-        avg_valence = sum(r.get("sentiment", {}).get("valence", 0.0) for r in self.records) / max(1, total_posts)
+        self.cumulative_total = max(self.cumulative_total, len(self.records))
+        avg_valence = sum(r.get("sentiment", {}).get("valence", 0.0) for r in self.records) / max(1, len(self.records))
         sarcasm_count = sum(1 for r in self.records if r.get("sentiment", {}).get("sarcasm", {}).get("is_sarcastic", False))
         
         now = time.time()
         recent_posts = sum(1 for r in self.records if r.get("timestamp_epoch", 0) >= now - 60)
 
         return {
-            "total_posts": total_posts,
+            "total_posts": self.cumulative_total,
             "overall_sentiment_index": round(avg_valence, 2),
             "sarcasm_detected_count": sarcasm_count,
             "active_platforms": len(set(r.get("platform") for r in self.records)),

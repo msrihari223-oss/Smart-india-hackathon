@@ -726,7 +726,7 @@
       <!-- Tab Switcher -->
       <div class="auth-tabs" id="tab-container">
         <button id="tab-login" class="auth-tab-btn active" onclick="switchTab('login')">
-          <i class="fas fa-lock-open"></i> Log In (Sign In)
+          <i class="fas fa-right-to-bracket"></i> Log In
         </button>
         <button id="tab-register" class="auth-tab-btn" onclick="switchTab('register')">
           <i class="fas fa-user-plus"></i> Create Account
@@ -739,7 +739,7 @@
         <span id="alert-msg">Notification message</span>
       </div>
 
-      <!-- ================= 1. LOG IN (SIGN IN) FORM ================= -->
+      <!-- ================= 1. LOG IN FORM ================= -->
       <form id="form-login" onsubmit="handleLogin(event)">
         <div class="form-group">
           <label class="form-label" for="login-identifier">
@@ -773,11 +773,11 @@
         </div>
 
         <button type="submit" id="btn-login-submit" class="btn-submit">
-          <i class="fas fa-satellite-dish"></i> Log In to Intelligence Command
+          <i class="fas fa-satellite-dish"></i> Log In to Dashboard
         </button>
       </form>
 
-      <!-- ================= 2. SIGN IN / SIGN UP (CREATE ACCOUNT) FORM ================= -->
+      <!-- ================= 2. CREATE ACCOUNT / SIGN IN FORM ================= -->
       <form id="form-register" style="display: none;" onsubmit="handleRegister(event)">
         
         <div class="form-group">
@@ -786,7 +786,7 @@
           </label>
           <div class="input-wrapper">
             <i class="fas fa-terminal input-icon"></i>
-            <input type="text" id="reg-username" class="auth-input" placeholder="e.g. jdoe99 or analyst_mark" required autocomplete="username" />
+            <input type="text" id="reg-username" class="auth-input" placeholder="e.g. vu_cse1 or analyst_mark" required autocomplete="username" />
           </div>
         </div>
 
@@ -806,7 +806,7 @@
           </label>
           <div class="input-wrapper">
             <i class="fas fa-phone input-icon"></i>
-            <input type="tel" id="reg-phone" class="auth-input" placeholder="e.g. +1-555-0199 or 9876543210" required autocomplete="tel" />
+            <input type="tel" id="reg-phone" class="auth-input" placeholder="e.g. +916304677919 or 9876543210" required autocomplete="tel" />
           </div>
         </div>
 
@@ -943,7 +943,7 @@
           <i class="fas fa-rotate-left"></i> Try Again
         </button>
         <button type="button" class="btn-modal-register" onclick="switchToRegisterFromModal()">
-          <i class="fas fa-user-plus"></i> Sign In / Register
+          <i class="fas fa-user-plus"></i> Create Account
         </button>
       </div>
     </div>
@@ -1063,25 +1063,26 @@
           // Save session
           localStorage.setItem('aetheria_token', data.token);
           localStorage.setItem('aetheria_user', JSON.stringify(data.user));
+          localStorage.setItem('current_user', data.user.username);
           
           showAlert(data.message || 'Authentication verified! Access granted. Redirecting...', false);
           setTimeout(() => {
             window.location.href = '/';
-          }, 700);
+          }, 600);
         } else {
-          // Trigger the 'Candidate not found' pop-up modal!
+          // Trigger the pop-up modal or error notification
           const errMsg = data.message || 'Candidate not found';
           showAlert(errMsg, true);
           showNotFoundModal(errMsg);
           btn.disabled = false;
-          btn.innerHTML = '<i class="fas fa-satellite-dish"></i> Log In to Intelligence Command';
+          btn.innerHTML = '<i class="fas fa-satellite-dish"></i> Log In to Dashboard';
         }
       } catch (err) {
         console.error(err);
         showAlert('Network or Server Connection Error. Please verify server status.', true);
         showNotFoundModal('Candidate not found');
         btn.disabled = false;
-        btn.innerHTML = '<i class="fas fa-satellite-dish"></i> Log In to Intelligence Command';
+        btn.innerHTML = '<i class="fas fa-satellite-dish"></i> Log In to Dashboard';
       }
     }
 
@@ -1093,7 +1094,7 @@
       const username = document.getElementById('reg-username').value.trim();
       const email = document.getElementById('reg-email').value.trim();
       const phone = document.getElementById('reg-phone').value.trim();
-      const fullName = (document.getElementById('reg-fullname') ? document.getElementById('reg-fullname').value.trim() : "") || username;
+      const fullName = username;
       const password = document.getElementById('reg-password').value;
       const btn = document.getElementById('btn-reg-submit');
 
@@ -1129,13 +1130,14 @@
         if (data.success && data.token) {
           localStorage.setItem('aetheria_token', data.token);
           localStorage.setItem('aetheria_user', JSON.stringify(data.user));
+          localStorage.setItem('current_user', data.user.username);
 
-          showAlert('Account registered and saved to database! Redirecting to Command Center...', false);
+          showAlert(data.message || 'Account authenticated & saved to database! Redirecting...', false);
           setTimeout(() => {
             window.location.href = '/';
-          }, 800);
+          }, 600);
         } else {
-          showAlert(data.message || 'Registration failed. User ID or Email might already exist.', true);
+          showAlert(data.message || 'Registration failed. Please check your entries.', true);
           btn.disabled = false;
           btn.innerHTML = '<i class="fas fa-id-badge"></i> Sign In & Save Credentials to Database';
         }

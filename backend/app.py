@@ -271,13 +271,60 @@ async def analyze_custom_post(req: CustomAnalysisRequest):
         "toxicity": sentiment_res.get("toxicity", {})
     }
 
+class CheckDangerWordsRequest(BaseModel):
+    text: str
+    author_username: Optional[str] = "operator"
+    author_name: Optional[str] = "Operator"
+    author_email: Optional[str] = None
+    send_warning_email: Optional[bool] = False
+    source: Optional[str] = "live_input"
+
+@app.get("/api/moderation/danger-words")
+async def get_danger_words_dataset():
+    """Retrieve full categorized dataset of danger words, threat terms, profanities, and categories"""
+    from backend.ml.sentiment_engine import toxicity_engine
+    return toxicity_engine.get_dataset()
+
 @app.post("/api/check-toxicity")
-async def check_toxicity_fast(req: CustomAnalysisRequest):
+@app.post("/api/moderation/check-danger-words")
+async def check_danger_words_api(req: CheckDangerWordsRequest):
     """
-    Ultra-low-latency endpoint for live typing / instant bad-word and toxic hashtag detection.
+    Checks text against the danger words dataset in real time.
+    When danger words are detected, if send_warning_email is True, automatically dispatches
+    the official warning notice to the user's registered email address.
     """
     from backend.ml.sentiment_engine import toxicity_engine
-    return toxicity_engine.analyze_toxicity(req.text)
+    from backend.services.email_service import email_service
+    from backend.auth import auth_manager
+
+    tox = toxicity_engine.analyze_toxicity(req.text)
+    author_username = (req.author_username or "operator").strip()
+    user_record = auth_manager.get_user(author_username)
+    author_email = (req.author_email or "").strip() or (user_record.get("email") if user_record else None) or f"{author_username.lower()}@socialmediaanalytics.io"
+    author_name = (user_record.get("full_name") if user_record else req.author_name) or author_username
+
+    email_sent = False
+    if tox["is_toxic"] and req.send_warning_email:
+        email_service.send_toxicity_warning_email(
+            to_email=author_email,
+            username=author_name,
+            comment_text=req.text,
+            detected_violations=tox.get("detected_bad_words", []) + tox.get("detected_bad_hashtags", []),
+            severity=tox.get("severity", "HIGH"),
+            post_id=req.source or "live_input"
+        )
+        email_sent = True
+
+    return {
+        "is_toxic": tox["is_toxic"],
+        "toxicity": tox,
+        "warning_sent_to": author_email if (tox["is_toxic"] and email_sent) else None,
+        "email_warning_dispatched": email_sent,
+        "danger_words_detected": tox.get("detected_bad_words", []) + tox.get("detected_bad_hashtags", []),
+        "severity": tox.get("severity", "SAFE"),
+        "categories": tox.get("categories", []),
+        "explanation": tox.get("explanation", "")
+    }
 
 
 # ----------------- Media Posting & Interactive Comments Endpoints -----------------
@@ -289,14 +336,17 @@ class CreatePostRequest(BaseModel):
     media_url: Optional[str] = None
     author_name: Optional[str] = "Operator"
     author_username: Optional[str] = "operator"
+    author_email: Optional[str] = None
     author_role: Optional[str] = "Intelligence Operator"
     author_avatar: Optional[str] = None
     location: Optional[str] = "Global Station"
+    force_publish: Optional[bool] = False
 
 class CreateCommentRequest(BaseModel):
     text: str
     author_username: Optional[str] = "operator"
     author_name: Optional[str] = "Operator"
+    author_email: Optional[str] = None
     author_avatar: Optional[str] = None
     author_role: Optional[str] = "Analyst"
     force_publish: Optional[bool] = False
@@ -349,11 +399,15 @@ async def upload_media_file(file: UploadFile = File(...)):
 async def create_user_post(req: CreatePostRequest):
     """
     Creates and broadcasts a new user post with optional Photo/Video attachments.
-    Runs full AI NLP sentiment, demographic analysis, and stores in database & active stream.
+    Runs full AI NLP sentiment, toxicity moderation with automated email warning dispatch,
+    and stores in database & active stream.
     """
     import uuid
     import time
     from datetime import datetime
+    from backend.ml.sentiment_engine import toxicity_engine
+    from backend.services.email_service import email_service
+    from backend.auth import auth_manager
 
     post_id = f"post_usr_{uuid.uuid4().hex[:10]}"
     now_epoch = time.time()
@@ -386,6 +440,34 @@ async def create_user_post(req: CreatePostRequest):
       else:
         final_text = "Live dispatch broadcast."
 
+    # Step 1: Toxicity & Bad-Word Moderation Check on Post
+    tox = toxicity_engine.analyze_toxicity(final_text)
+    author_username = (req.author_username or "operator").strip()
+    user_record = auth_manager.get_user(author_username)
+    author_email = (req.author_email or "").strip() or (user_record.get("email") if user_record else None) or f"{author_username.lower()}@socialmediaanalytics.io"
+    author_name = (user_record.get("full_name") if user_record else req.author_name) or author_username
+
+    if tox["is_toxic"]:
+        # Dispatch automated conduct violation warning notice email
+        email_service.send_toxicity_warning_email(
+            to_email=author_email,
+            username=author_name,
+            comment_text=final_text,
+            detected_violations=tox.get("detected_bad_words", []) + tox.get("detected_bad_hashtags", []),
+            severity=tox.get("severity", "HIGH"),
+            post_id=post_id
+        )
+
+        if not req.force_publish:
+            return {
+                "success": False,
+                "warning_required": True,
+                "toxicity": tox,
+                "email_warning_dispatched": True,
+                "warning_sent_to": author_email,
+                "message": f"⚠️ Conduct Violation Detected: Bad/abusive language identified in post. An official Policy Warning Notice has been dispatched to your email ({author_email})."
+            }
+
     sentiment_res = sentiment_engine.analyze(final_text)
     demo_res = demographic_engine.infer_profile("", final_text, req.location or "Global Station")
     
@@ -398,8 +480,8 @@ async def create_user_post(req: CreatePostRequest):
         "media_type": media_type,
         "media_url": media_url,
         "author": {
-            "name": req.author_name or "Intelligence Operator",
-            "username": req.author_username or "operator",
+            "name": author_name,
+            "username": author_username,
             "bio": "Aetheria Intelligence Contributor",
             "location": req.location or "Global Station",
             "followers": 15400,
@@ -464,7 +546,7 @@ async def add_post_comment(post_id: str, req: CreateCommentRequest):
     # Resolve author email for policy dispatch
     author_username = (req.author_username or "operator").strip()
     user_record = auth_manager.get_user(author_username)
-    author_email = (user_record.get("email") if user_record else None) or f"{author_username.lower()}@socialmediaanalytics.io"
+    author_email = (req.author_email or "").strip() or (user_record.get("email") if user_record else None) or f"{author_username.lower()}@socialmediaanalytics.io"
     author_name = (user_record.get("full_name") if user_record else req.author_name) or author_username
 
     mail_dispatch_result = None

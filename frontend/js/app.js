@@ -147,21 +147,22 @@ class App {
 
     // Custom Deep Analyzer Form & Guardrail
     const analyzerInput = document.getElementById('analyzer-text');
-    let toxicityDebounceTimer = null;
+    let analyzerTypingTimer = null;
 
+    // Analyzer Live Input
     if (analyzerInput) {
-      // Live debounced real-time typing analysis
-      analyzerInput.addEventListener('input', (e) => {
-        clearTimeout(toxicityDebounceTimer);
-        const text = e.target.value.trim();
+      this.attachDangerWordLiveWatcher(analyzerInput, false);
+      analyzerInput.addEventListener('input', async () => {
+        const text = analyzerInput.value.trim();
+        clearTimeout(analyzerTypingTimer);
         if (!text) {
-          this.updateLiveToxicityPill({ is_toxic: false, severity: 'SAFE', detected_bad_words: [], detected_bad_hashtags: [] });
+          this.resetLiveToxicityPill();
           return;
         }
 
-        toxicityDebounceTimer = setTimeout(async () => {
+        analyzerTypingTimer = setTimeout(async () => {
           try {
-            const tox = await ApiClient.checkToxicity({ text });
+            const tox = await ApiClient.checkToxicity(text);
             this.updateLiveToxicityPill(tox);
           } catch (err) {
             console.error('Toxicity live check failed:', err);
@@ -202,7 +203,7 @@ class App {
 
     if (btnSanitize) {
       btnSanitize.addEventListener('click', () => {
-        // If comment modal is active, sanitize comment input and submit
+        // 1. If comment modal is active, sanitize comment input and submit
         const commentInput = document.getElementById('comment-input-text');
         if (this.activeCommentPost && commentInput && this.lastAnalyzedToxicity) {
           const sanitized = this.sanitizeText(
@@ -216,6 +217,21 @@ class App {
           return;
         }
 
+        // 2. If Studio Broadcast post creator has text, sanitize creator input
+        const postCreatorInput = document.getElementById('creator-post-text');
+        if (postCreatorInput && postCreatorInput.value.trim() && this.lastAnalyzedToxicity) {
+          const sanitized = this.sanitizeText(
+            postCreatorInput.value,
+            this.lastAnalyzedToxicity.detected_bad_words || [],
+            this.lastAnalyzedToxicity.detected_bad_hashtags || []
+          );
+          postCreatorInput.value = sanitized;
+          this.hideToxicityWarningModal();
+          this.showToast('🛡️ Content Sanitized', 'Offensive terms have been sanitized. You can now post safely.', 'info');
+          return;
+        }
+
+        // 3. If AI Analyzer input has text, sanitize analyzer input
         if (this.lastAnalyzedToxicity && analyzerInput) {
           const sanitized = this.sanitizeText(
             analyzerInput.value,
@@ -407,7 +423,7 @@ class App {
       });
     }
 
-    // Studio Post Character Counter Listener
+    // Studio Post Character Counter & Live Danger Word Watcher
     const creatorPostText = document.getElementById('creator-post-text');
     const creatorCharCounter = document.getElementById('creator-char-counter');
     if (creatorPostText && creatorCharCounter) {
@@ -416,6 +432,7 @@ class App {
         creatorCharCounter.innerText = `${len} / 500`;
         creatorCharCounter.style.color = len > 450 ? '#f43f5e' : 'var(--text-dim)';
       });
+      this.attachDangerWordLiveWatcher(creatorPostText, false);
     }
 
     // ================= Studio Broadcast Post Handler =================
@@ -444,6 +461,7 @@ class App {
         let u = window.authController?.user || {};
         let authorUsername = u.username || 'operator';
         let authorName = u.full_name || 'Intelligence Operator';
+        let authorEmail = u.email || `${authorUsername}@socialmediaanalytics.io`;
         let authorAvatar = u.avatar || null;
         let authorRole = u.role || 'Analyst';
 
@@ -455,9 +473,20 @@ class App {
             media_url: mediaUrl,
             author_username: authorUsername,
             author_name: authorName,
+            author_email: authorEmail,
             author_avatar: authorAvatar,
             author_role: authorRole
           });
+
+          if (res.warning_required && res.toxicity) {
+            // Bad words detected in studio broadcast post!
+            this.lastAnalyzedToxicity = res.toxicity;
+            this.showToxicityWarningModal(res.toxicity, text, false, res.warning_sent_to || authorEmail);
+            this.showToast('⚠️ Conduct Violation Detected', `Bad/abusive language identified. Warning notice sent to ${res.warning_sent_to || authorEmail}.`, 'warning');
+            btnBroadcast.disabled = false;
+            btnBroadcast.innerHTML = '<i class="fas fa-paper-plane"></i> Post';
+            return;
+          }
 
           if (res.success && res.post) {
             this.addUserPost(res.post);
@@ -487,7 +516,7 @@ class App {
               if (feedEl) feedEl.scrollIntoView({ behavior: 'smooth' });
             }, 500);
           } else {
-            alert('Failed to post: ' + (res.error || 'Unknown error'));
+            alert('Failed to post: ' + (res.error || res.message || 'Unknown error'));
             btnBroadcast.disabled = false;
             btnBroadcast.innerHTML = '<i class="fas fa-paper-plane"></i> Post';
           }
@@ -1241,7 +1270,10 @@ class App {
       `;
     }
 
-    if (inputEl) inputEl.value = '';
+    if (inputEl) {
+      inputEl.value = '';
+      this.attachDangerWordLiveWatcher(inputEl, true);
+    }
 
     modal.style.display = 'flex';
     await this.loadComments(post.id);
@@ -1305,12 +1337,14 @@ class App {
 
     let authorUsername = 'operator';
     let authorName = 'Intelligence Operator';
+    let authorEmail = null;
     let authorAvatar = null;
     let authorRole = 'Analyst';
 
     if (window.authController && window.authController.user) {
       authorUsername = window.authController.user.username || 'operator';
       authorName = window.authController.user.full_name || 'Operator';
+      authorEmail = window.authController.user.email || null;
       authorAvatar = window.authController.user.avatar || null;
       authorRole = window.authController.user.role || 'Analyst';
     }
@@ -1326,6 +1360,7 @@ class App {
         text: text,
         author_username: authorUsername,
         author_name: authorName,
+        author_email: authorEmail,
         author_avatar: authorAvatar,
         author_role: authorRole,
         force_publish: forcePublish
@@ -1334,7 +1369,9 @@ class App {
       if (res.warning_required && res.toxicity) {
         // AI Anti-Toxicity Moderation Intercepted Bad Language!
         this.lastAnalyzedToxicity = res.toxicity;
-        this.showToxicityWarningModal(res.toxicity, text, true);
+        const targetEmail = res.warning_sent_to || authorEmail || `${authorUsername}@socialmediaanalytics.io`;
+        this.showToxicityWarningModal(res.toxicity, text, true, targetEmail);
+        this.showToast('⚠️ Conduct Violation Notice', `Bad/abusive language detected! Warning email sent to ${targetEmail}.`, 'warning');
         if (btn) {
           btn.disabled = false;
           btn.innerHTML = '<i class="fas fa-comment-dots"></i> Post Comment';
@@ -1464,20 +1501,27 @@ class App {
         : 'Initial narrative seed broadcast';
 
       el.innerHTML = `
-        <div style="display: flex; justify-content: space-between; font-size: 0.78rem;">
-          <span style="font-weight: 700; color: var(--neon-cyan);"><i class="fas fa-arrow-right"></i> Step ${s.step || (idx + 1)}: Diffusion Phase</span>
-          <span style="color: #10b981; font-family: var(--font-mono); font-weight: 600;">Cumulative Reach: ${reached.toLocaleString()} users</span>
-        </div>
-        <div style="font-size: 0.74rem; color: var(--text-secondary); margin-top: 4px;">
-          <b>Propagations:</b> ${actNodes}
-        </div>
-      `;
-      log.appendChild(el);
-    });
+  renderKpis(kpis) {
+    if (!kpis) return;
+    const totalEl = document.getElementById('kpi-total-posts');
+    const sentEl = document.getElementById('kpi-sentiment-index');
+    const spreadEl = document.getElementById('kpi-spread-velocity');
+    const alertEl = document.getElementById('kpi-active-alerts');
+
+    if (totalEl) totalEl.innerText = (kpis.total_posts || 0).toLocaleString();
+    if (sentEl) {
+      sentEl.innerText = `${(kpis.sentiment_index || 0.0).toFixed(2)}`;
+      sentEl.style.color = (kpis.sentiment_index || 0) >= 0 ? 'var(--neon-cyan)' : 'var(--neon-rose)';
+    }
+    if (spreadEl) spreadEl.innerText = `${kpis.spread_velocity || 1.0}x`;
+    if (alertEl) {
+      alertEl.innerText = kpis.active_alerts || 0;
+      alertEl.style.color = (kpis.active_alerts || 0) > 0 ? 'var(--neon-rose)' : 'var(--neon-emerald)';
+    }
   }
 
-  updateToxicityLiveIndicator(tox) {
-    const pill = document.getElementById('toxicity-live-indicator');
+  updateLiveToxicityIndicator(tox) {
+    const pill = document.getElementById('live-guardrail-pill');
     if (!pill || !tox) return;
 
     if (tox.severity === 'SAFE') {
@@ -1489,13 +1533,55 @@ class App {
     } else if (tox.severity === 'MEDIUM') {
       pill.className = 'toxicity-pill-badge pill-warning';
       pill.innerHTML = `<i class="fas fa-exclamation-triangle"></i> <span>Flagged: Bad Words / Tags (${tox.detected_bad_words.length + tox.detected_bad_hashtags.length})</span>`;
-    } else {
-      pill.className = 'toxicity-pill-badge pill-danger';
-      pill.innerHTML = `<i class="fas fa-radiation-alt"></i> <span>Violation: ${tox.severity} Toxicity!</span>`;
     }
   }
 
-  showToxicityWarningModal(tox, rawText, isComment = false) {
+  attachDangerWordLiveWatcher(inputEl, isComment = false) {
+    if (!inputEl || inputEl.dataset.watcherAttached) return;
+    inputEl.dataset.watcherAttached = 'true';
+    let timer = null;
+    let lastWarnedText = '';
+
+    inputEl.addEventListener('input', () => {
+      const text = inputEl.value.trim();
+      clearTimeout(timer);
+
+      if (!text || text.length < 3) return;
+
+      timer = setTimeout(async () => {
+        // Prevent duplicate popup loops on identical text
+        if (text === lastWarnedText) return;
+
+        let u = window.authController?.user || {};
+        let authorUsername = u.username || 'operator';
+        let authorName = u.full_name || 'Operator';
+        let authorEmail = u.email || `${authorUsername}@socialmediaanalytics.io`;
+
+        try {
+          const res = await ApiClient.checkDangerWords({
+            text: text,
+            author_username: authorUsername,
+            author_name: authorName,
+            author_email: authorEmail,
+            send_warning_email: true,
+            source: isComment ? 'live_comment_input' : 'live_post_input'
+          });
+
+          if (res.is_toxic && res.toxicity) {
+            lastWarnedText = text;
+            this.lastAnalyzedToxicity = res.toxicity;
+            const targetEmail = res.warning_sent_to || authorEmail;
+            this.showToxicityWarningModal(res.toxicity, text, isComment, targetEmail);
+            this.showToast('🚨 Danger Word Intercepted!', `Prohibited terms detected. Official warning notice sent to ${targetEmail}.`, 'warning');
+          }
+        } catch (err) {
+          // Graceful fallback
+        }
+      }, 600);
+    });
+  }
+
+  showToxicityWarningModal(tox, rawText, isComment = false, dispatchedEmail = null) {
     const modal = document.getElementById('toxicity-warning-modal');
     if (!modal) return;
 
@@ -1517,12 +1603,12 @@ class App {
     if (headingEl) {
       headingEl.innerText = isComment 
         ? '🚨 BAD COMMENT DETECTED!' 
-        : 'Toxicity & Content Guardrail Alert';
+        : '🚨 BAD WORD / TOXIC CONTENT DETECTED!';
     }
     if (subheadingEl) {
       subheadingEl.innerText = isComment
         ? 'Your comment violates community safety guidelines. Offensive or abusive words were detected and blocked.'
-        : 'Our AI filter detected offensive terms, toxic hashtags, or abusive content in your submission.';
+        : 'Our AI guardrails detected offensive terms, toxic hashtags, or abusive language in your post.';
     }
 
     if (btnSanitize) {
@@ -1580,12 +1666,12 @@ class App {
     }
 
     if (actionText) actionText.innerText = isComment ? 'Comment Blocked — Revise or Auto-Sanitize' : (tox.moderation_action === 'AUTO_BLOCK' ? 'Auto-Block & Flag User Profile' : 'Pop-Up Warning & Content Flagged');
-    if (explText) explText.innerText = tox.explanation || 'Offensive, profane, or abusive words were detected in your comment.';
+    if (explText) explText.innerText = tox.explanation || 'Offensive, profane, or abusive words were detected in your content.';
 
     const emailNoticeText = document.getElementById('modal-email-target-text');
-    const userEmail = (window.authController?.user?.email) || `${window.authController?.user?.username || 'user'}@socialmediaanalytics.io`;
+    const targetEmail = dispatchedEmail || (window.authController?.user?.email) || `${window.authController?.user?.username || 'user'}@socialmediaanalytics.io`;
     if (emailNoticeText) {
-      emailNoticeText.textContent = `A formal Conduct Violation Notice has been automatically dispatched to ${userEmail}.`;
+      emailNoticeText.textContent = `A formal Conduct Violation Notice has been automatically dispatched to ${targetEmail}.`;
     }
 
     modal.style.display = 'flex';

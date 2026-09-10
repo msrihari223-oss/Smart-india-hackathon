@@ -1,61 +1,25 @@
-"""
-Multi-Dimensional Sentiment & Nuanced Emotion NLP Intelligence Engine
-Performs fine-grained emotion recognition (Joy, Excitement, Anxiety, Anger, Sadness, Supportive, Against, Neutral)
-with context-aware valence calculation, negation decay, adversative clause weighting,
-slang & Hinglish understanding, contrastive sarcasm detection, stance scoring,
-and intelligent toxicity moderation with false-positive protection.
-"""
-
+import os
 import re
+import json
 import math
 from typing import Dict, Any, List, Set, Tuple
 
 class ToxicityModerationEngine:
     """
     High-Precision AI Content Moderation & Toxicity Guardrails Engine.
-    Detects profanities, toxic hashtags, hate speech, harassment, threats, and cyberbullying
+    Detects danger words, profanities, toxic hashtags, hate speech, harassment, threats, and cyberbullying
     across English, Internet Slang, Leetspeak, and Hinglish while protecting legitimate slang phrases.
     """
     def __init__(self):
-        # Whitelisted benign phrases that contain violent/sensitive words in a positive or colloquial context
-        self.whitelisted_phrases = {
-            "killer feature", "killer app", "killer update", "killer design", "killer price",
-            "killing it", "killed it", "killing the game", "badass app", "badass feature", "badass build",
-            "sick beat", "sick design", "sick feature", "sick update", "sick drop",
-            "drop dead gorgeous", "drop-dead gorgeous", "shooting for the stars", "shoot for the moon",
-            "bomb food", "the bomb", "blowing up", "blew my mind", "die hard fan", "die-hard fan",
-            "to die for", "dead serious", "drop dead", "deadass", "slaying it", "slay"
-        }
+        self.dataset_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "danger_words_dataset.json")
+        self.whitelisted_phrases: Set[str] = set()
+        self.profanities: Set[str] = set()
+        self.category_triggers: Dict[str, Set[str]] = {}
+        self.dataset_metadata: Dict[str, Any] = {}
+        self.raw_dataset: Dict[str, Any] = {}
 
-        # Explicit bad words & profanities (English + Hinglish + Internet slang)
-        self.profanities = {
-            # Severe Profanities & Slurs
-            "fuck", "fucking", "fucked", "fucker", "fuckin", "motherfucker", "mf", "stfu", "gtfo",
-            "shit", "bullshit", "shitty", "shitting", "dipshit", "horseshit",
-            "bitch", "bitches", "bitching", "bitchy", "son of a bitch",
-            "asshole", "dumbass", "jackass", "fatass", "asshat",
-            "bastard", "bastards", "cunt", "cunts", "dick", "dickhead", "cock", "pussy",
-            "slut", "whore", "nigger", "nigga", "faggot", "fag", "retard", "retarded",
-            
-            # Insults, Harassment & Toxicity
-            "idiot", "idiots", "idiotic", "stupid", "moron", "morons", "imbecile", "loser", "losers",
-            "trash", "garbage", "clown", "clowns", "clownshow", "scumbag", "scumbags",
-            "ugly", "disgusting", "pathetic", "creep", "freak", "scam", "scammer", "scammers",
-            "fraud", "cheater", "cheaters", "liar", "liars", "corrupt", "parasite", "psychopath",
-            "worthless", "useless", "hypocrite", "piece of shit", "pos", "stinking", "toxic",
-            "dirtbag", "douchebag", "incompetent", "scum", "lowlife", "trashbag",
-            
-            # Threats & Violence cues
-            "kill yourself", "die in a fire", "suicide", "hang yourself", "burn in hell", "choke on",
-            "torture", "slash your", "stab you", "execute them", "bomb them", "terrorist attack",
-            "slit your", "behead", "massacre", "lynch",
-            
-            # Hinglish & Hindi abusive / bad words
-            "chutiya", "chutiye", "chutiyapa", "madarchod", "mc", "bhenchod", "bc", "bhosdike", "bsdk",
-            "gandu", "gaand", "harami", "haramkhor", "kutta", "kutte", "kamina", "kamine",
-            "saale", "saala", "laude", "loda", "lund", "randi", "rakhel", "bhadwa", "bhadwe",
-            "bakwas", "ghatiya", "chapri", "nalayak", "tatti", "dhokhebaaz", "chor", "kutte ki maut"
-        }
+        # Default fallbacks
+        self._load_dataset()
 
         # Substring / Leetspeak normalization patterns
         self.leetspeak_map = {
@@ -76,29 +40,55 @@ class ToxicityModerationEngine:
             r"#(?:cancel|boycott|destro|shame|expose|downwith)[a-zA-Z0-9_]+"
         ]
 
-        # Categorized toxicity triggers for granular breakdown
-        self.category_triggers = {
-            "Profanity & Vulgarity": {
-                "fuck", "fucking", "fucked", "fucker", "shit", "bullshit", "bitch", "asshole", 
-                "bastard", "cunt", "dick", "pussy", "slut", "whore", "chutiya", "madarchod", "bhenchod",
-                "gandu", "bhosdike", "laude", "lund", "randi", "stfu", "gtfo"
-            },
-            "Insults & Harassment": {
-                "idiot", "idiots", "stupid", "moron", "morons", "loser", "losers", "trash", 
-                "clown", "clowns", "pathetic", "ugly", "scumbag", "worthless", "useless", "creep",
-                "harami", "kamina", "kutta", "ghatiya", "chapri", "nalayak", "bakwas", "dirtbag",
-                "douchebag", "scum", "lowlife"
-            },
-            "Hate Speech & Slurs": {
-                "nigger", "nigga", "faggot", "fag", "retard", "retarded", "parasite", "terrorist"
-            },
-            "Threats & Violence": {
-                "kill yourself", "die in a fire", "suicide", "hang yourself", "burn in hell", "torture", 
-                "shoot them", "bomb them", "execute them", "stab you", "slit your", "behead", "lynch"
-            },
-            "Scam & Defamation": {
-                "scam", "scammer", "scammers", "fraud", "cheater", "liar", "corrupt", "dhokhebaaz"
+    def _load_dataset(self):
+        """Loads danger words dictionary from JSON dataset or uses defaults."""
+        loaded = False
+        if os.path.exists(self.dataset_path):
+            try:
+                with open(self.dataset_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    self.raw_dataset = data
+                    self.dataset_metadata = data.get("metadata", {})
+                    self.whitelisted_phrases = set(data.get("whitelisted_phrases", []))
+                    
+                    categories = data.get("categories", {})
+                    for cat_name, cat_data in categories.items():
+                        words = set(w.lower() for w in cat_data.get("words", []))
+                        self.category_triggers[cat_name] = words
+                        self.profanities.update(words)
+                    loaded = True
+            except Exception:
+                loaded = False
+
+        if not loaded:
+            self.whitelisted_phrases = {
+                "killer feature", "killer app", "killer update", "killer design", "killer price",
+                "killing it", "killed it", "killing the game", "badass app", "badass feature", "badass build",
+                "sick beat", "sick design", "sick feature", "sick update", "sick drop",
+                "drop dead gorgeous", "drop-dead gorgeous", "shooting for the stars", "shoot for the moon",
+                "bomb food", "the bomb", "blowing up", "blew my mind", "die hard fan", "die-hard fan",
+                "to die for", "dead serious", "drop dead", "deadass", "slaying it", "slay"
             }
+            self.profanities = {
+                "fuck", "fucking", "fucked", "fucker", "shit", "bullshit", "bitch", "asshole",
+                "bastard", "cunt", "dick", "pussy", "nigger", "nigga", "faggot", "idiot", "moron",
+                "kill", "murder", "bomb", "terrorist", "scam", "chutiya", "madarchod", "bhenchod", "gandu"
+            }
+            self.category_triggers = {
+                "Profanity & Vulgarity": {"fuck", "shit", "bitch", "asshole", "bastard", "cunt", "dick", "pussy"},
+                "Threats & Violence": {"kill", "murder", "bomb", "terrorist"},
+                "Insults & Harassment": {"idiot", "moron", "loser", "trash"},
+                "Hate Speech & Slurs": {"nigger", "nigga", "faggot"}
+            }
+
+    def get_dataset(self) -> Dict[str, Any]:
+        """Returns the loaded danger words dataset for frontend consumption."""
+        if self.raw_dataset:
+            return self.raw_dataset
+        return {
+            "metadata": {"name": "Danger Words Dataset", "total_words": len(self.profanities)},
+            "categories": {k: {"words": list(v)} for k, v in self.category_triggers.items()},
+            "whitelisted_phrases": list(self.whitelisted_phrases)
         }
 
     def normalize_leetspeak(self, text: str) -> str:
@@ -162,24 +152,27 @@ class ToxicityModerationEngine:
                     detected_categories.add("Toxic Hashtag")
                     break
 
-        # 2. Check Words & Phrases in Normalized Text
-        tokens = set(re.findall(r'\b[\w\']+\b', normalized_text))
-        raw_tokens = set(re.findall(r'\b[\w\']+\b', lower_text))
+        # 2. Check Words & Phrases in Normalized Text (with Whitelist Scrubbing)
+        scrubbed_text = normalized_text
+        scrubbed_lower = lower_text
+        for phrase in self.whitelisted_phrases:
+            if phrase in scrubbed_lower:
+                scrubbed_lower = scrubbed_lower.replace(phrase, " ")
+            if phrase in scrubbed_text:
+                scrubbed_text = scrubbed_text.replace(phrase, " ")
+
+        tokens = set(re.findall(r'\b[\w\']+\b', scrubbed_text))
+        raw_tokens = set(re.findall(r'\b[\w\']+\b', scrubbed_lower))
         all_tokens = tokens.union(raw_tokens)
 
         for bad in self.profanities:
             if " " in bad:
-                if bad in normalized_text or bad in lower_text:
+                if bad in scrubbed_text or bad in scrubbed_lower:
                     detected_bad_words.add(bad)
             else:
                 if bad in all_tokens:
-                    # If word is in whitelist context (e.g. "killer" or "killing" or "sick" or "badass"), ignore if benign
-                    if has_whitelist and bad in ["kill", "killing", "badass", "sick", "dead"]:
-                        continue
                     detected_bad_words.add(bad)
-                elif re.search(r'\b' + re.escape(bad) + r'\b', normalized_text):
-                    if has_whitelist and bad in ["kill", "killing", "badass", "sick", "dead"]:
-                        continue
+                elif re.search(r'\b' + re.escape(bad) + r'\b', scrubbed_text):
                     detected_bad_words.add(bad)
 
         # 3. Categorize matched terms

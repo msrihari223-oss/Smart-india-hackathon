@@ -111,6 +111,20 @@ export const ApiClient = {
     window.open(`${API_BASE}/api/real-users/export?format=${format}`, '_blank');
   },
 
+  async getDangerWordsDataset() {
+    const res = await fetch(`${API_BASE}/api/moderation/danger-words`);
+    return await res.json();
+  },
+
+  async checkDangerWords(payload) {
+    const res = await fetch(`${API_BASE}/api/moderation/check-danger-words`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    return await res.json();
+  },
+
   async createPost(payload) {
     const res = await fetch(`${API_BASE}/api/posts/create`, {
       method: 'POST',

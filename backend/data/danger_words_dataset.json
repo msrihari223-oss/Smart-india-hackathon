@@ -1,0 +1,103 @@
+{
+  "metadata": {
+    "name": "Aetheria Global Danger & Toxic Words Dataset",
+    "version": "2.4.0",
+    "description": "Comprehensive multi-category dictionary of danger words, high-severity threats, profanities, hate speech, cyberbullying, Hinglish abuse, and toxic hashtags with real-time severity scoring.",
+    "total_categories": 7,
+    "last_updated": "2026-09-10"
+  },
+  "categories": {
+    "Threats & Violence": {
+      "severity": "CRITICAL",
+      "action": "AUTO_BLOCK",
+      "score": 0.98,
+      "words": [
+        "kill", "killer", "killing", "kill you", "kill yourself", "die", "die in a fire", "death threat",
+        "murder", "murderer", "murdering", "massacre", "bloodbath", "genocide", "assassinate", "assassination",
+        "bomb", "bomber", "bombing", "bomb them", "suicide bomb", "pipe bomb", "car bomb", "terrorist", "terrorism",
+        "terror attack", "behead", "beheading", "decapitate", "lynch", "lynching", "hang yourself", "hang you",
+        "torture", "torturing", "strangle", "choke you", "burn alive", "burn in hell", "burn your house",
+        "shoot you", "shooting", "headshot", "stab you", "stabbing", "slit your throat", "slit your", "slash you",
+        "poison", "poisoning", "weapon", "grenade", "ak47", "sniper", "destroy you", "i will end you",
+        "suicide", "commit suicide", "take your own life", "end your life", "cut yourself"
+      ]
+    },
+    "Severe Profanity & Vulgarity": {
+      "severity": "CRITICAL",
+      "action": "AUTO_BLOCK",
+      "score": 0.95,
+      "words": [
+        "fuck", "fucking", "fucked", "fucker", "fuckin", "motherfucker", "motherfucking", "mf", "stfu", "gtfo",
+        "bitch", "bitches", "bitching", "bitchy", "son of a bitch", "sob",
+        "shit", "shitty", "shitting", "bullshit", "horseshit", "dipshit", "piece of shit", "pos",
+        "asshole", "dumbass", "jackass", "fatass", "asshat", "badasshole",
+        "bastard", "bastards", "cunt", "cunts", "dick", "dickhead", "cock", "cocksucker",
+        "pussy", "pussies", "slut", "sluts", "whore", "whores", "twat", "wanker"
+      ]
+    },
+    "Hate Speech & Slurs": {
+      "severity": "CRITICAL",
+      "action": "AUTO_BLOCK",
+      "score": 0.99,
+      "words": [
+        "nigger", "nigga", "niggers", "faggot", "fag", "faggots", "retard", "retarded", "retards",
+        "kike", "chink", "spic", "wetback", "gook", "towelhead", "raghead", "subhuman",
+        "vermin", "parasite", "parasites", "abomination", "race traitor", "white trash"
+      ]
+    },
+    "Cyberbullying, Harassment & Insults": {
+      "severity": "HIGH",
+      "action": "WARN_AND_BLOCK",
+      "score": 0.85,
+      "words": [
+        "idiot", "idiots", "idiotic", "stupid", "moron", "morons", "imbecile", "imbeciles", "loser", "losers",
+        "trash", "garbage", "clown", "clowns", "clownshow", "scumbag", "scumbags", "dirtbag", "douchebag",
+        "pathetic", "ugly", "disgusting", "creep", "creepy", "freak", "freaks", "worthless", "useless",
+        "hypocrite", "hypocrites", "incompetent", "scum", "lowlife", "trashbag", "toxic", "stinking",
+        "go cry", "crybaby", "nobody likes you", "waste of space", "waste of oxygen", "brainless"
+      ]
+    },
+    "Scams, Fraud & Extortion": {
+      "severity": "HIGH",
+      "action": "WARN_AND_BLOCK",
+      "score": 0.80,
+      "words": [
+        "scam", "scammer", "scammers", "scamming", "fraud", "fraudulent", "fraudster", "fraudsters",
+        "cheater", "cheaters", "cheating", "liar", "liars", "corrupt", "corruption", "dhokhebaaz",
+        "blackmail", "blackmailing", "extortion", "extorting", "pyramid scheme", "ponzi scheme",
+        "stole money", "robbed us", "fake project", "rugpull", "rug pull"
+      ]
+    },
+    "Hinglish & Regional Abusive Danger Words": {
+      "severity": "CRITICAL",
+      "action": "AUTO_BLOCK",
+      "score": 0.96,
+      "words": [
+        "chutiya", "chutiye", "chutiyapa", "choot", "madarchod", "madarchodh", "mc", "bhenchod", "behenchod", "bc",
+        "bhosdike", "bhosadike", "bsdk", "bhosda", "gandu", "gaand", "gaandu", "harami", "haramkhor", "haramzada",
+        "kutta", "kutte", "kutiya", "kutte ki maut", "kamina", "kamine", "saale", "saala", "sala", "saali",
+        "laude", "loda", "lund", "lauda", "lodu", "randi", "rakhel", "bhadwa", "bhadwe", "bhadwaa",
+        "bakwas", "ghatiya", "chapri", "nalayak", "tatti", "dhokhebaaz", "chor", "chor bazaari", "chori",
+        "chod", "choda", "chudai", "gaali", "marenge", "jaan se maar dunga", "maar dalunga", "khatam kar dunga"
+      ]
+    },
+    "Toxic & Abusive Hashtags": {
+      "severity": "HIGH",
+      "action": "WARN_AND_BLOCK",
+      "score": 0.88,
+      "words": [
+        "#hate", "#kill", "#die", "#fuck", "#bitch", "#bastard", "#idiot", "#trash",
+        "#scam", "#fraud", "#fake", "#corrupt", "#boycott", "#cancel", "#liar", "#clown",
+        "#ghatiya", "#loser", "#shame", "#expose", "#downwith", "#killthescam", "#hatethisapp"
+      ]
+    }
+  },
+  "whitelisted_phrases": [
+    "killer feature", "killer app", "killer update", "killer design", "killer price",
+    "killing it", "killed it", "killing the game", "badass app", "badass feature", "badass build",
+    "sick beat", "sick design", "sick feature", "sick update", "sick drop",
+    "drop dead gorgeous", "drop-dead gorgeous", "shooting for the stars", "shoot for the moon",
+    "bomb food", "the bomb", "blowing up", "blew my mind", "die hard fan", "die-hard fan",
+    "to die for", "dead serious", "drop dead", "deadass", "slaying it", "slay", "wicked good"
+  ]
+}

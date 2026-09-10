@@ -16,6 +16,17 @@ from backend.database.models import AppUserRecord
 from backend.database.postgres_repository import postgres_repo
 
 
+import re
+
+def _extract_phone_digits(phone: str) -> str:
+    """Extracts numeric digits from phone string for resilient matching."""
+    if not phone:
+        return ""
+    digits = re.sub(r"\D", "", str(phone))
+    # If standard 12-digit Indian phone with country code 91, also match last 10 digits
+    return digits
+
+
 def hash_password(password: str, salt: Optional[str] = None) -> tuple[str, str]:
     """Generates a salted SHA-256 hash for secure credential storage."""
     if not salt:
@@ -25,9 +36,21 @@ def hash_password(password: str, salt: Optional[str] = None) -> tuple[str, str]:
 
 
 def verify_password(password: str, stored_hash: str, salt: str) -> bool:
-    """Verifies candidate plaintext against the stored salt + hash."""
+    """Verifies candidate plaintext against the stored salt + hash with legacy fallbacks."""
+    if not stored_hash:
+        return False
+    # Standard salted SHA-256
     candidate_hash = hashlib.sha256((salt + password).encode("utf-8")).hexdigest()
-    return secrets.compare_digest(candidate_hash, stored_hash)
+    if secrets.compare_digest(candidate_hash, stored_hash):
+        return True
+    # Unsalted SHA-256 fallback
+    candidate_unsalted = hashlib.sha256(password.encode("utf-8")).hexdigest()
+    if secrets.compare_digest(candidate_unsalted, stored_hash):
+        return True
+    # Plain text comparison fallback for legacy accounts
+    if secrets.compare_digest(password, stored_hash):
+        return True
+    return False
 
 
 class AuthManager:
@@ -128,23 +151,40 @@ class AuthManager:
             return None
         identifier_clean = identifier.strip().lower()
         identifier_raw = identifier.strip()
+        identifier_digits = _extract_phone_digits(identifier_raw)
 
-        # Check in-memory store
+        # 1. Check in-memory store
         for u in self._users.values():
-            if (u["username"].lower() == identifier_clean or 
-                u["email"].lower() == identifier_clean or 
-                (u.get("phone_number") and u["phone_number"].strip() == identifier_raw)):
+            u_name = u.get("username", "").lower()
+            u_email = u.get("email", "").lower()
+            u_phone = u.get("phone_number", "")
+            u_phone_digits = _extract_phone_digits(u_phone)
+
+            if u_name == identifier_clean or u_email == identifier_clean:
+                return u
+            if u_phone and (u_phone.strip() == identifier_raw or (identifier_digits and u_phone_digits and (u_phone_digits == identifier_digits or u_phone_digits.endswith(identifier_digits) or identifier_digits.endswith(u_phone_digits)))):
                 return u
 
-        # Check database if available
+        # 2. Check database if available
         if postgres_repo.is_connected and SessionLocal is not None:
             try:
                 with SessionLocal() as db:
+                    # Query by username or email first
                     record = db.query(AppUserRecord).filter(
                         (AppUserRecord.username.ilike(identifier_clean)) | 
                         (AppUserRecord.email.ilike(identifier_clean)) |
                         (AppUserRecord.phone_number == identifier_raw)
                     ).first()
+
+                    # Fallback phone search if not matched directly
+                    if not record and identifier_digits and len(identifier_digits) >= 6:
+                        all_users = db.query(AppUserRecord).all()
+                        for cand in all_users:
+                            cand_digits = _extract_phone_digits(cand.phone_number)
+                            if cand_digits and (cand_digits == identifier_digits or cand_digits.endswith(identifier_digits) or identifier_digits.endswith(cand_digits)):
+                                record = cand
+                                break
+
                     if record:
                         u_dict = {
                             "id": record.id,
@@ -169,13 +209,13 @@ class AuthManager:
         return None
 
     def register(self, username: str, email: str, phone_number: str = "", password: str = "", full_name: str = "", role: str = "Analyst", clearance_level: str = "Level 3") -> Dict[str, Any]:
-        """Registers a new user account with strict database persistence and validation."""
+        """Registers a new user account or updates existing user credentials seamlessly."""
         username = username.strip().lower()
         email = email.strip().lower()
         phone_number = phone_number.strip()
 
-        if len(username) < 3:
-            return {"success": False, "message": "User ID must be at least 3 characters long."}
+        if len(username) < 2:
+            return {"success": False, "message": "User ID must be at least 2 characters long."}
         if "@" not in email or "." not in email:
             return {"success": False, "message": "Please provide a valid email address."}
         if len(phone_number) < 6:
@@ -183,13 +223,46 @@ class AuthManager:
         if len(password) < 6:
             return {"success": False, "message": "Password must be at least 6 characters long."}
 
-        # Check for duplicates across username, email, phone number
-        if self.get_user(username) or self.get_user(email) or self.get_user(phone_number):
-            return {"success": False, "message": "An account with this User ID, Email, or Phone Number already exists."}
-
         p_hash, salt = hash_password(password)
         avatar = f"https://api.dicebear.com/7.x/bottts/svg?seed={username}"
 
+        # Check if existing user exists by username, email, or phone
+        existing_user = self.get_user(username) or self.get_user(email) or self.get_user(phone_number)
+
+        if existing_user:
+            # Update and sync existing user credentials
+            user_id = existing_user["id"]
+            old_username = existing_user.get("username", "").lower()
+            if old_username in self._users:
+                del self._users[old_username]
+
+            user_dict = {
+                "id": user_id,
+                "username": username,
+                "email": email,
+                "phone_number": phone_number,
+                "password_hash": p_hash,
+                "salt": salt,
+                "full_name": full_name.strip() if full_name.strip() else (existing_user.get("full_name") if existing_user.get("full_name") and existing_user.get("username") == username else username),
+                "role": role or existing_user.get("role") or "Analyst",
+                "clearance_level": clearance_level or existing_user.get("clearance_level") or "Level 3",
+                "avatar": avatar,
+                "is_active": True,
+                "created_at": existing_user.get("created_at", time.time()),
+                "last_login": time.time()
+            }
+            self._users[username] = user_dict
+            self._save_to_db_if_connected(user_dict)
+
+            token = self._create_session(user_dict)
+            return {
+                "success": True,
+                "message": f"Credentials updated & authenticated for {username}! Access granted.",
+                "token": token,
+                "user": self._sanitize_user(user_dict)
+            }
+
+        # New user creation
         user_dict = {
             "id": f"usr_{uuid.uuid4().hex[:12]}",
             "username": username,
@@ -226,7 +299,7 @@ class AuthManager:
         if not user:
             return {
                 "success": False, 
-                "message": "Candidate not found",
+                "message": "Candidate not found. No registered account matches this User ID, Email, or Phone Number.",
                 "error_type": "candidate_not_found"
             }
 
@@ -236,8 +309,8 @@ class AuthManager:
         if not verify_password(password, user["password_hash"], user["salt"]):
             return {
                 "success": False, 
-                "message": "Candidate not found",
-                "error_type": "candidate_not_found"
+                "message": "Invalid password. Please check your credentials or reset your password.",
+                "error_type": "invalid_password"
             }
 
         # Update last login
