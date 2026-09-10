@@ -21,6 +21,20 @@ class StreamBroadcaster:
     async def connect(self, websocket: WebSocket):
         await websocket.accept()
         self.active_connections.add(websocket)
+        # Push immediate snapshot upon connection so client is never empty
+        try:
+            kpis = timeline_db.get_kpis()
+            trends = trend_engine.get_trending_topics()
+            recent = timeline_db.get_records(limit=10)
+            snapshot = {
+                "type": "INIT_SNAPSHOT",
+                "kpis": kpis,
+                "trends": trends,
+                "recent_posts": recent
+            }
+            await websocket.send_text(json.dumps(snapshot))
+        except Exception:
+            pass
 
     def disconnect(self, websocket: WebSocket):
         self.active_connections.discard(websocket)
@@ -52,7 +66,7 @@ class StreamBroadcaster:
                     "trends": trends
                 }
 
-                # 3. Broadcast to all active clients
+                # 3. Broadcast to all active clients safely
                 if self.active_connections:
                     message_str = json.dumps(payload)
                     stale_connections = []
@@ -64,6 +78,10 @@ class StreamBroadcaster:
                     
                     for stale in stale_connections:
                         self.disconnect(stale)
+                        try:
+                            await stale.close()
+                        except Exception:
+                            pass
 
             except Exception as e:
                 print(f"Error in broadcast loop: {e}")
@@ -83,5 +101,9 @@ class StreamBroadcaster:
             
             for stale in stale_connections:
                 self.disconnect(stale)
+                try:
+                    await stale.close()
+                except Exception:
+                    pass
 
 stream_broadcaster = StreamBroadcaster()

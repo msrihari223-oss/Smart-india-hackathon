@@ -1029,6 +1029,23 @@
       }
     }
 
+    // Dynamic Backend Base URL Resolution (Supports localhost:8000, 127.0.0.1:8000, Live Server, and production)
+    function resolveAuthApiBase() {
+      if (typeof window === 'undefined') return 'http://127.0.0.1:8000';
+      const loc = window.location;
+      if (!loc || loc.protocol === 'file:' || loc.origin === 'null' || !loc.origin) {
+        return 'http://127.0.0.1:8000';
+      }
+      if (loc.port === '8000' || (!loc.port && (loc.protocol === 'http:' || loc.protocol === 'https:'))) {
+        return loc.origin;
+      }
+      if (loc.hostname === 'localhost' || loc.hostname === '127.0.0.1') {
+        return `http://${loc.hostname}:8000`;
+      }
+      return loc.origin;
+    }
+    const AUTH_API_BASE = resolveAuthApiBase();
+
     function switchToRegisterFromModal() {
       closeNotFoundModal();
       switchTab('register');
@@ -1052,7 +1069,7 @@
       btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Verifying Credentials...';
 
       try {
-        const res = await fetch('/api/auth/login', {
+        const res = await fetch(`${AUTH_API_BASE}/api/auth/login`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ username: identifier, password: password })
@@ -1112,7 +1129,7 @@
       btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving Credentials to Database...';
 
       try {
-        const res = await fetch('/api/auth/register', {
+        const res = await fetch(`${AUTH_API_BASE}/api/auth/register`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -1205,7 +1222,7 @@
       btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Dispatching OTP to Email...';
 
       try {
-        const res = await fetch('/api/auth/request-otp', {
+        const res = await fetch(`${AUTH_API_BASE}/api/auth/request-otp`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ identifier: identifier })
@@ -1277,7 +1294,7 @@
       btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Verifying OTP & Updating Database...';
 
       try {
-        const res = await fetch('/api/auth/verify-reset-otp', {
+        const res = await fetch(`${AUTH_API_BASE}/api/auth/verify-reset-otp`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -1313,7 +1330,7 @@
       const token = localStorage.getItem('aetheria_token');
       if (token) {
         try {
-          const res = await fetch(`/api/auth/me?token=${encodeURIComponent(token)}`);
+          const res = await fetch(`${AUTH_API_BASE}/api/auth/me?token=${encodeURIComponent(token)}`);
           const data = await res.json();
           if (data.authenticated && data.user) {
             showAlert(`Active session detected for ${data.user.full_name || data.user.username}. Redirecting...`, false);

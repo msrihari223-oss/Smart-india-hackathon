@@ -18,7 +18,7 @@ class ToxicityModerationEngine:
         self.dataset_metadata: Dict[str, Any] = {}
         self.raw_dataset: Dict[str, Any] = {}
 
-        # Default fallbacks
+        # Load dataset
         self._load_dataset()
 
         # Substring / Leetspeak normalization patterns
@@ -67,18 +67,21 @@ class ToxicityModerationEngine:
                 "sick beat", "sick design", "sick feature", "sick update", "sick drop",
                 "drop dead gorgeous", "drop-dead gorgeous", "shooting for the stars", "shoot for the moon",
                 "bomb food", "the bomb", "blowing up", "blew my mind", "die hard fan", "die-hard fan",
-                "to die for", "dead serious", "drop dead", "deadass", "slaying it", "slay"
+                "to die for", "dead serious", "drop dead", "deadass", "slaying it", "slay", "it slays",
+                "clean build", "smooth run"
             }
             self.profanities = {
                 "fuck", "fucking", "fucked", "fucker", "shit", "bullshit", "bitch", "asshole",
                 "bastard", "cunt", "dick", "pussy", "nigger", "nigga", "faggot", "idiot", "moron",
-                "kill", "murder", "bomb", "terrorist", "scam", "chutiya", "madarchod", "bhenchod", "gandu"
+                "kill", "murder", "bomb", "terrorist", "scam", "chutiya", "madarchod", "bhenchod", "gandu",
+                "loser", "trash", "worthless", "harass", "suicide", "threat"
             }
             self.category_triggers = {
-                "Profanity & Vulgarity": {"fuck", "shit", "bitch", "asshole", "bastard", "cunt", "dick", "pussy"},
-                "Threats & Violence": {"kill", "murder", "bomb", "terrorist"},
-                "Insults & Harassment": {"idiot", "moron", "loser", "trash"},
-                "Hate Speech & Slurs": {"nigger", "nigga", "faggot"}
+                "Profanity & Vulgarity": {"fuck", "fucking", "fucked", "fucker", "shit", "bullshit", "bitch", "asshole", "bastard", "cunt", "dick", "pussy"},
+                "Threats & Violence": {"kill", "murder", "bomb", "terrorist", "suicide", "threat"},
+                "Insults & Harassment": {"idiot", "moron", "loser", "trash", "worthless", "harass"},
+                "Hate Speech & Slurs": {"nigger", "nigga", "faggot"},
+                "Regional Abuse": {"chutiya", "madarchod", "bhenchod", "gandu"}
             }
 
     def get_dataset(self) -> Dict[str, Any]:
@@ -96,7 +99,7 @@ class ToxicityModerationEngine:
         norm = text.lower()
         for char, repl in self.leetspeak_map.items():
             norm = re.sub(char, repl, norm)
-        # remove inner asterisks or periods in words (e.g. f.u.c.k or f*ck)
+        # Remove inner asterisks or periods in words (e.g. f.u.c.k or f*ck)
         norm = re.sub(r'(\b\w)[\*\.\-_]+(\w\b)', r'\1\2', norm)
         return norm
 
@@ -125,9 +128,6 @@ class ToxicityModerationEngine:
         original_text = text
         lower_text = text.lower()
         normalized_text = self.normalize_leetspeak(lower_text)
-
-        # Check whitelist first for mild matches
-        has_whitelist = self.is_whitelisted(lower_text)
 
         detected_bad_words = set()
         detected_bad_hashtags = set()
@@ -188,9 +188,9 @@ class ToxicityModerationEngine:
         # 4. Toxicity Scoring and Severity Calculation
         total_violations = len(detected_bad_words) + (len(detected_bad_hashtags) * 1.5)
         
-        has_hate = "Hate Speech & Slurs" in detected_categories
-        has_threat = "Threats & Violence" in detected_categories
-        has_profanity = "Profanity & Vulgarity" in detected_categories
+        has_hate = any("Hate" in c for c in detected_categories)
+        has_threat = any("Threat" in c or "Violence" in c for c in detected_categories)
+        has_profanity = any("Profanity" in c or "Vulgarity" in c or "Regional" in c for c in detected_categories)
 
         score = 0.0
         if total_violations > 0:
@@ -241,14 +241,14 @@ class MultiDimensionalSentimentEngine:
     """
     Advanced Multi-Dimensional Sentiment & Nuanced Emotion NLP Engine.
     Features:
-    - Context-Aware Valence & Polarity scoring (-1.0 to +1.0)
-    - Adversative clause weighting ('but', 'however' prioritizes the trailing clause)
-    - Negation scope propagation with distance decay ('not bad at all' -> positive)
+    - Accurate Context-Aware Valence & Polarity scoring (-1.0 to +1.0)
+    - Sentence Boundary Isolation & Adversative Clause Weighting ('but', 'however')
+    - Negation Scope Propagation with Distance Decay & Positive Double Negations ('not bad at all')
     - Slang, Crypto/Finance, Tech, and Multilingual Hinglish support
     - 8 Fine-Grained Emotion Dimensions: Joy, Excitement, Anxiety, Anger, Sadness, Supportive, Against, Neutral
-    - Contrastive Sarcasm & Irony Detection
-    - Directional Stance Scoring
-    - Toxicity & Content Moderation
+    - Contrastive Sarcasm & Irony Detection with Polarity Inversion
+    - Directional Stance Scoring (Supportive, Neutral, Against)
+    - Integrated Toxicity & Content Moderation Guardrails
     """
     def __init__(self):
         self.toxicity_engine = ToxicityModerationEngine()
@@ -262,7 +262,7 @@ class MultiDimensionalSentimentEngine:
                 "khushi", "sweet", "wholesome", "yay", "yaay", "yaaaay", "grateful", "joyful", "pleased", "masterpiece",
                 "gem", "fabulous", "banger", "goated", "goat", "superb", "terrific", "splendid", "admire", "admirable",
                 "zabardast", "mast", "lajawab", "superhit", "dhamaal", "perfect", "perfection", "flawless", "gold",
-                "killer", "slaying", "slay", "sleek", "smooth", "clean"
+                "killer", "slaying", "slay", "sleek", "smooth", "clean", "peak", "stellar", "exceptional"
             },
             "excitement": {
                 "hyped", "hype", "pumped", "can't wait", "massive", "gamechanger", "breakthrough", "epic", 
@@ -270,14 +270,15 @@ class MultiDimensionalSentimentEngine:
                 "thrilled", "astonishing", "mindblown", "surge", "wagmi", "op", "legendary", "supercharged", 
                 "insanely", "breathtaking", "unbelievable", "lit", "bullish", "ath", "skyrocketing", "exploding",
                 "next-gen", "ultra", "powerhouse", "electrifying", "wild", "unmatched", "genius", "groundbreaking",
-                "killer", "slaying", "slay", "fast", "speed", "accelerate"
+                "killer", "slaying", "slay", "fast", "speed", "accelerate", "cutting-edge", "unprecedented", "game-changing"
             },
             "anxiety": {
                 "worried", "worry", "scared", "fear", "fearing", "anxious", "panic", "collapse", "risk", "danger", 
                 "uncertain", "uncertainty", "crash", "stress", "stressed", "nervous", "warning", "threat", "vulnerable", 
                 "terrible", "downturn", "loss", "bleak", "alarm", "crisis", "frightened", "dread", "shaking", 
                 "insecure", "fragile", "plunge", "dump", "reckoning", "ngmi", "fud", "bearish", "liquidated",
-                "precarious", "catastrophe", "critical", "peril", "unstable", "shaky", "trouble", "delay", "delayed"
+                "precarious", "catastrophe", "critical", "peril", "unstable", "shaky", "trouble", "delay", "delayed",
+                "skeptical", "hesitant", "concern", "concerned"
             },
             "anger": {
                 "furious", "outrage", "outraged", "corrupt", "scam", "disgusting", "hate", "hating", "fraud", 
@@ -287,25 +288,27 @@ class MultiDimensionalSentimentEngine:
                 "clownshow", "scumbag", "bullshit", "wtff", "wtf", "bastards", "sucks", "disaster", "abhorrent", 
                 "fuck", "bitch", "asshole", "chutiya", "madarchod", "rip-off", "robbery", "atrocious", "abysmal",
                 "cooked", "trashy", "garbage", "failing", "fails", "crashing", "crashes", "broken", "losing",
-                "bugs", "buggy", "delay", "delayed"
+                "bugs", "buggy", "delay", "delayed", "horrendous", "unethical"
             },
             "sadness": {
                 "depressed", "depression", "heartbroken", "sad", "disappointed", "disappointment", "mourning", 
                 "loss", "regret", "tragic", "unfortunate", "grief", "pain", "failed", "failure", "miss", "hopeless", 
                 "devastated", "crying", "suffering", "down", "rip", "heartbreak", "misery", "dismal", "gloomy", 
-                "ruined", "lonely", "sorrow", "grieving", "demoralized", "defeated", "downcast", "failing", "losing", "lost"
+                "ruined", "lonely", "sorrow", "grieving", "demoralized", "defeated", "downcast", "failing", "losing", "lost",
+                "sorrowful", "disheartened"
             },
             "supportive": {
                 "agree", "agreed", "support", "supported", "supporting", "stand with", "backed", "valid", "endorse", 
                 "kudos", "respect", "inspiring", "solid", "true", "count on me", "aligned", "well done", "salute", 
                 "facts", "spot on", "based", "protect", "bravo", "props", "full support", "champion", "advocate",
-                "commendable", "praise", "praiseworthy", "sahi hai", "100%", "amen", "hear hear", "upvoted"
+                "commendable", "praise", "praiseworthy", "sahi hai", "100%", "amen", "hear hear", "upvoted",
+                "legit", "accurate", "reliable", "verified", "kudos"
             },
             "against": {
                 "disagree", "oppose", "opposing", "boycott", "reject", "rejected", "cancel", "nonsense", "false", 
                 "misleading", "counter", "protest", "untrue", "fake", "flawed", "resist", "stop", "condemn", 
                 "overrated", "cringe", "ratio", "discredited", "sham", "refuse", "unacceptable", "anti",
-                "debunked", "cap", "shill", "propaganda", "boycotting", "condemned"
+                "debunked", "cap", "shill", "propaganda", "boycotting", "condemned", "distrust", "unsub"
             }
         }
         
@@ -318,13 +321,14 @@ class MultiDimensionalSentimentEngine:
             "gamechanger": 0.85, "breakthrough": 0.85, "lfg": 0.80, "wagmi": 0.75, "shandar": 0.85,
             "zabardast": 0.85, "badhiya": 0.80, "superb": 0.85, "triumph": 0.82, "victory": 0.80,
             "killer": 0.85, "slaying": 0.85, "slay": 0.80, "sleek": 0.65, "smooth": 0.60,
+            "stellar": 0.85, "exceptional": 0.88, "peak": 0.75, "flawless": 0.92,
             
             # Moderate Positive (+0.3 to +0.65)
             "good": 0.50, "great": 0.65, "happy": 0.60, "glad": 0.45, "nice": 0.40, "cool": 0.45,
             "sweet": 0.40, "win": 0.60, "solid": 0.50, "valid": 0.45, "true": 0.40, "respect": 0.55,
             "helpful": 0.50, "promising": 0.45, "progress": 0.50, "bullish": 0.65, "based": 0.55,
             "support": 0.55, "agree": 0.45, "sahi": 0.45, "mast": 0.60, "clean": 0.40, "fast": 0.50,
-            "speed": 0.50,
+            "speed": 0.50, "reliable": 0.55, "useful": 0.50, "efficient": 0.55,
             
             # Strong Negative (-0.7 to -1.0)
             "terrible": -0.85, "horrible": -0.85, "disaster": -0.90, "catastrophe": -0.92, "awful": -0.80,
@@ -333,7 +337,7 @@ class MultiDimensionalSentimentEngine:
             "fuck": -0.80, "fucking": -0.70, "shit": -0.75, "bullshit": -0.85, "bitch": -0.75, "asshole": -0.85,
             "chutiya": -0.85, "madarchod": -0.95, "bhenchod": -0.90, "ghatiya": -0.80, "bakwas": -0.75,
             "cooked": -0.70, "ruined": -0.80, "devastated": -0.85, "failing": -0.80, "fails": -0.75,
-            "crashing": -0.85, "crashes": -0.80, "crash": -0.80, "broken": -0.80,
+            "crashing": -0.85, "crashes": -0.80, "crash": -0.80, "broken": -0.80, "horrendous": -0.90,
             
             # Moderate Negative (-0.3 to -0.65)
             "bad": -0.50, "poor": -0.45, "slow": -0.35, "failed": -0.60, "failure": -0.60, "wrong": -0.45,
@@ -444,14 +448,17 @@ class MultiDimensionalSentimentEngine:
                 "toxicity": toxicity_res
             }
 
-        cleaned_text = text.lower()
-        words = re.findall(r'\b[\w\']+\b', cleaned_text)
-        
+        # Split into individual sentences to isolate negation scope
+        raw_sentences = re.split(r'[\.\?!;\n]+', text)
+        sentences = [s.strip() for s in raw_sentences if s.strip()]
+        if not sentences:
+            sentences = [text.strip()]
+
         # Initialize emotion accumulator
         emotion_scores: Dict[str, float] = {k: 0.0 for k in self.emotion_lexicons}
         valence_accumulator: List[float] = []
 
-        # 1. Emoji Analysis
+        # 1. Global Emoji Analysis
         for char, (emo, weight) in self.emoji_emotion_map.items():
             count = text.count(char)
             if count > 0:
@@ -462,7 +469,7 @@ class MultiDimensionalSentimentEngine:
                 elif emo in ["anger", "sadness", "anxiety", "against"]:
                     valence_accumulator.append(-0.6 * multiplier)
 
-        # 2. Emoticon Analysis
+        # 2. Global Emoticon Analysis
         for emo_str, (emo, weight) in self.emoticon_emotion_map.items():
             if emo_str in text:
                 emotion_scores[emo] += weight
@@ -471,68 +478,72 @@ class MultiDimensionalSentimentEngine:
                 elif emo in ["anger", "sadness", "anxiety", "against"]:
                     valence_accumulator.append(-0.5 * weight)
 
-        # 3. Context-Aware Clause & Word Analysis
-        # Check if sentence contains adversative conjunctions ('but', 'however')
-        has_adversative = any(w in self.adversative_conjunctions for w in words)
-        adversative_index = -1
-        if has_adversative:
+        # 3. Sentence-by-Sentence Context & Clause Analysis
+        for sentence in sentences:
+            cleaned_sentence = sentence.lower()
+            words = re.findall(r'\b[\w\']+\b', cleaned_sentence)
+            if not words:
+                continue
+
+            # Adversative conjunction index in this sentence
+            adversative_index = -1
             for idx, w in enumerate(words):
                 if w in self.adversative_conjunctions:
                     adversative_index = idx
                     break
 
-        for i, word in enumerate(words):
-            # Clause weighting: words after 'but' get higher priority (1.75x), words before get lower (0.4x)
-            clause_multiplier = 1.0
-            if adversative_index != -1:
-                clause_multiplier = 1.75 if i > adversative_index else 0.4
+            for i, word in enumerate(words):
+                # Clause weighting: words after adversative get 1.75x, before get 0.4x
+                clause_multiplier = 1.0
+                if adversative_index != -1:
+                    clause_multiplier = 1.75 if i > adversative_index else 0.4
 
-            # Lookback for negation & modifiers (up to 3 words preceding)
-            prev_window = words[max(0, i-3):i]
-            is_negated = any(pw in self.negations for pw in prev_window)
-            
-            # Check for double negative / positive negation (e.g. "not bad", "not terrible", "never disappoints")
-            is_positive_negation = False
-            if is_negated and word in ["bad", "terrible", "horrible", "awful", "disappointing", "disappoint", "wrong"]:
-                is_positive_negation = True
+                # Lookback for negation & modifiers within current sentence (up to 3 words preceding)
+                prev_window = words[max(0, i-3):i]
+                is_negated = any(pw in self.negations for pw in prev_window)
+                
+                # Check for double negative / positive negation (e.g. "not bad", "not terrible", "never disappoints")
+                is_positive_negation = False
+                if is_negated and word in ["bad", "terrible", "horrible", "awful", "disappointing", "disappoint", "wrong", "ugly"]:
+                    is_positive_negation = True
 
-            # Modifier multiplier
-            mod_multiplier = 1.0
-            for pw in prev_window:
-                if pw in self.intensifiers:
-                    mod_multiplier *= self.intensifiers[pw]
-                elif pw in self.diminishers:
-                    mod_multiplier *= self.diminishers[pw]
+                # Modifier multiplier
+                mod_multiplier = 1.0
+                for pw in prev_window:
+                    if pw in self.intensifiers:
+                        mod_multiplier *= self.intensifiers[pw]
+                    elif pw in self.diminishers:
+                        mod_multiplier *= self.diminishers[pw]
 
-            total_word_multiplier = clause_multiplier * mod_multiplier
-            
-            # Repetition normalization (e.g. loooove -> love)
-            normalized_word = re.sub(r'(.)\1{2,}', r'\1\1', word)
-            
-            # Emotion Lexicon Matching
-            for emotion, vocab in self.emotion_lexicons.items():
-                if word in vocab or normalized_word in vocab:
-                    if is_positive_negation:
-                        emotion_scores["joy"] += 1.2 * total_word_multiplier
-                        emotion_scores["supportive"] += 1.0 * total_word_multiplier
-                    elif is_negated:
-                        if emotion in ["joy", "excitement", "supportive"]:
-                            emotion_scores["against"] += 1.4 * total_word_multiplier
-                            emotion_scores["anger"] += 0.8 * total_word_multiplier
+                total_word_multiplier = clause_multiplier * mod_multiplier
+                
+                # Repetition normalization (e.g. loooove -> love)
+                normalized_word = re.sub(r'(.)\1{2,}', r'\1\1', word)
+                
+                # Emotion Lexicon Matching
+                for emotion, vocab in self.emotion_lexicons.items():
+                    if word in vocab or normalized_word in vocab:
+                        if is_positive_negation:
+                            emotion_scores["joy"] += 1.2 * total_word_multiplier
+                            emotion_scores["supportive"] += 1.0 * total_word_multiplier
+                        elif is_negated:
+                            if emotion in ["joy", "excitement", "supportive"]:
+                                emotion_scores["against"] += 1.4 * total_word_multiplier
+                                emotion_scores["anger"] += 0.8 * total_word_multiplier
+                            else:
+                                emotion_scores["supportive"] += 0.9 * total_word_multiplier
                         else:
-                            emotion_scores["supportive"] += 0.9 * total_word_multiplier
-                    else:
-                        emotion_scores[emotion] += 1.5 * total_word_multiplier
+                            emotion_scores[emotion] += 1.5 * total_word_multiplier
 
-            # Valence Matching
-            v_val = self.word_valences.get(word) or self.word_valences.get(normalized_word)
-            if v_val is not None:
-                if is_positive_negation:
-                    valence_accumulator.append(0.55 * total_word_multiplier)
-                elif is_negated:
-                    valence_accumulator.append(-v_val * 0.85 * total_word_multiplier)
-                else:
-                    valence_accumulator.append(v_val * total_word_multiplier)
+                # Valence Matching
+                v_val = self.word_valences.get(word) or self.word_valences.get(normalized_word)
+                if v_val is not None:
+                    if is_positive_negation:
+                        valence_accumulator.append(0.55 * total_word_multiplier)
+                    elif is_negated:
+                        valence_accumulator.append(-v_val * 0.85 * total_word_multiplier)
+                    else:
+                        valence_accumulator.append(v_val * total_word_multiplier)
 
         # If toxic terms or bad hashtags detected, boost anger & against
         if toxicity_res["is_toxic"]:
@@ -543,13 +554,14 @@ class MultiDimensionalSentimentEngine:
         # 4. Sarcasm Analysis
         sarcasm_score = 0.0
         sarcasm_triggers = []
+        cleaned_full_text = text.lower()
         
         for pattern in self.sarcasm_cues:
             if re.search(pattern, text, re.IGNORECASE):
                 sarcasm_score += 0.50
                 sarcasm_triggers.append(pattern.replace(r"\b", "").replace("?:", ""))
         
-        if re.search(r'["\'](?:expert|genius|great|freedom|success|solution|unhackable|brilliant)["\']', cleaned_text):
+        if re.search(r'["\'](?:expert|genius|great|freedom|success|solution|unhackable|brilliant|revolution)["\']', cleaned_full_text):
             sarcasm_score += 0.45
             sarcasm_triggers.append("ironic_quotes")
             
@@ -570,21 +582,37 @@ class MultiDimensionalSentimentEngine:
             if pseudo_positivity > 0:
                 emotion_scores["against"] += pseudo_positivity * 1.8
                 emotion_scores["anger"] += pseudo_positivity * 1.2
-                emotion_scores["joy"] *= 0.1
-                emotion_scores["excitement"] *= 0.1
+                emotion_scores["joy"] *= 0.05
+                emotion_scores["excitement"] *= 0.05
                 valence_accumulator.append(-1.5)
 
-        # 5. Normalize emotion scores into probability distribution
+        # 5. Accurate Emotion Distribution & Neutral Mass Computation
         total_emotion_mass = sum(emotion_scores.values())
-        if total_emotion_mass > 0:
-            emotion_distribution = {k: round(v / total_emotion_mass, 3) for k, v in emotion_scores.items()}
-            primary_emotion = max(emotion_distribution, key=emotion_distribution.get)
-            neutral_mass = max(0.0, round(1.0 - sum(emotion_distribution.values()), 3))
-            emotion_distribution["neutral"] = neutral_mass
-        else:
+        word_count = max(1, len(re.findall(r'\b[\w\']+\b', text)))
+        
+        # Calculate baseline neutral weight based on ratio of non-emotional words to emotional activation
+        # Factual/informative text without strong emotional cues has high neutral weight
+        if total_emotion_mass == 0:
+            neutral_weight = 1.0
             emotion_distribution = {k: 0.0 for k in emotion_scores}
             emotion_distribution["neutral"] = 1.0
             primary_emotion = "neutral"
+        else:
+            # Neutral mass scales inversely with emotional density
+            density = total_emotion_mass / max(1.0, math.sqrt(word_count))
+            neutral_weight = max(0.05, 1.0 / (1.0 + density * 1.5))
+            
+            combined_mass = total_emotion_mass + neutral_weight
+            emotion_distribution = {k: round(v / combined_mass, 3) for k, v in emotion_scores.items()}
+            emotion_distribution["neutral"] = round(neutral_weight / combined_mass, 3)
+            
+            # Normalize to guarantee exact sum = 1.0
+            dist_sum = sum(emotion_distribution.values())
+            if dist_sum > 0:
+                diff = round(1.0 - dist_sum, 3)
+                emotion_distribution["neutral"] = round(max(0.0, emotion_distribution["neutral"] + diff), 3)
+
+            primary_emotion = max(emotion_distribution, key=emotion_distribution.get)
 
         # 6. Valence & Stance Calculation (-1.0 to +1.0)
         pos_weight = emotion_scores["joy"] * 1.4 + emotion_scores["excitement"] * 1.3 + emotion_scores["supportive"] * 1.5

@@ -23,6 +23,37 @@ class NetworkTopologyEngine:
         self._cache_ttl = 8.0  # seconds between graph recomputations
         self._dirty = True
 
+        self._seed_default_network()
+
+    def _seed_default_network(self):
+        """Pre-seeds network graph with key creator nodes and inter-relationships."""
+        default_nodes = [
+            ("tech_visionary", "Sarah Jenkins", "https://api.dicebear.com/7.x/bottts/svg?seed=tech_visionary", "Chief AI Architect", 850000, 0.4),
+            ("crypto_alpha", "Alex Rivera", "https://api.dicebear.com/7.x/bottts/svg?seed=crypto_alpha", "Web3 Strategist", 540000, 0.2),
+            ("quantum_guru", "Dr. Elena Vance", "https://api.dicebear.com/7.x/bottts/svg?seed=quantum_guru", "Quantum Physics Fellow", 410000, 0.1),
+            ("deeplearning_hub", "Marcus Brody", "https://api.dicebear.com/7.x/bottts/svg?seed=deeplearning_hub", "ML Research Lead", 620000, 0.3),
+            ("silicon_insider", "David Kim", "https://api.dicebear.com/7.x/bottts/svg?seed=silicon_insider", "Hardware & Silicon Analyst", 390000, -0.1),
+            ("policy_sentinel", "Rachel Adams", "https://api.dicebear.com/7.x/bottts/svg?seed=policy_sentinel", "Global AI Governance", 280000, 0.0),
+            ("cyber_guardian", "Tariq Mansoor", "https://api.dicebear.com/7.x/bottts/svg?seed=cyber_guardian", "Cyber Defense Lead", 470000, -0.2),
+            ("bio_synthetics", "Chloe Zhang", "https://api.dicebear.com/7.x/bottts/svg?seed=bio_synthetics", "Synthetic Biology Lead", 310000, 0.5)
+        ]
+        for username, name, avatar, role, followers, bias in default_nodes:
+            self.register_user_meta(username, name, avatar, role, followers, bias)
+
+        default_edges = [
+            ("tech_visionary", "deeplearning_hub", "retweet", 0.4),
+            ("deeplearning_hub", "quantum_guru", "quote", 0.3),
+            ("crypto_alpha", "tech_visionary", "mention", 0.2),
+            ("silicon_insider", "tech_visionary", "retweet", 0.5),
+            ("policy_sentinel", "tech_visionary", "reply", -0.1),
+            ("cyber_guardian", "crypto_alpha", "mention", -0.2),
+            ("bio_synthetics", "deeplearning_hub", "retweet", 0.6),
+            ("deeplearning_hub", "silicon_insider", "quote", 0.2)
+        ]
+        now = time.time()
+        for src, tgt, itype, sent in default_edges:
+            self.add_interaction(src, tgt, itype, sent, now)
+
     def add_interaction(self, source_user: str, target_user: str, interaction_type: str = "retweet", sentiment: float = 0.0, timestamp: float = 0.0):
         """
         Adds directed interaction edge to the network graph.

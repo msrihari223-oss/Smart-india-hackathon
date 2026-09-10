@@ -3,6 +3,23 @@
  * Manages operator login state, profile badges, clearance verification, and logout workflows.
  */
 
+function resolveAuthApiBase() {
+  if (typeof window === 'undefined') return 'http://127.0.0.1:8000';
+  const loc = window.location;
+  if (!loc || loc.protocol === 'file:' || loc.origin === 'null' || !loc.origin) {
+    return 'http://127.0.0.1:8000';
+  }
+  if (loc.port === '8000' || (!loc.port && (loc.protocol === 'http:' || loc.protocol === 'https:'))) {
+    return loc.origin;
+  }
+  if (loc.hostname === 'localhost' || loc.hostname === '127.0.0.1') {
+    return `http://${loc.hostname}:8000`;
+  }
+  return loc.origin;
+}
+
+const AUTH_API_BASE = resolveAuthApiBase();
+
 class AuthController {
   constructor() {
     this.token = localStorage.getItem('aetheria_token');
@@ -24,7 +41,7 @@ class AuthController {
 
   async validateSession() {
     try {
-      const res = await fetch(`/api/auth/me?token=${encodeURIComponent(this.token)}`);
+      const res = await fetch(`${AUTH_API_BASE}/api/auth/me?token=${encodeURIComponent(this.token)}`);
       const data = await res.json();
       if (data.authenticated && data.user) {
         this.user = data.user;
@@ -77,7 +94,7 @@ class AuthController {
 
   logout() {
     if (this.token) {
-      fetch('/api/auth/logout', {
+      fetch(`${AUTH_API_BASE}/api/auth/logout`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token: this.token })
@@ -92,8 +109,14 @@ class AuthController {
   }
 }
 
-// Global instance
+// Global instance & robust initialization
 window.authController = new AuthController();
-document.addEventListener('DOMContentLoaded', () => {
+function initAuth() {
   window.authController.init();
-});
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initAuth);
+} else {
+  initAuth();
+}

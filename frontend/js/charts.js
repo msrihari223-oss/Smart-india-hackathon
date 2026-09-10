@@ -12,7 +12,9 @@ export class ChartManager {
   }
 
   initEmotionDonut(canvasId, initialData = {}) {
-    const ctx = document.getElementById(canvasId).getContext('2d');
+    const el = document.getElementById(canvasId);
+    if (!el) return;
+    const ctx = el.getContext('2d');
     const labels = ['Joy', 'Excitement', 'Anxiety', 'Anger', 'Sadness', 'Supportive', 'Against', 'Neutral'];
     const colors = ['#10B981', '#00F0FF', '#F59E0B', '#EF4444', '#64748B', '#3B82F6', '#EC4899', '#94A3B8'];
 
@@ -59,7 +61,9 @@ export class ChartManager {
   }
 
   initTimelineChart(canvasId) {
-    const ctx = document.getElementById(canvasId).getContext('2d');
+    const el = document.getElementById(canvasId);
+    if (!el) return;
+    const ctx = el.getContext('2d');
     this.timelineChart = new Chart(ctx, {
       type: 'line',
       data: {
@@ -131,7 +135,9 @@ export class ChartManager {
   }
 
   initAgeDistribution(canvasId) {
-    const ctx = document.getElementById(canvasId).getContext('2d');
+    const el = document.getElementById(canvasId);
+    if (!el) return;
+    const ctx = el.getContext('2d');
     this.ageChart = new Chart(ctx, {
       type: 'bar',
       data: {
@@ -171,7 +177,9 @@ export class ChartManager {
   }
 
   initInterestsRadar(canvasId) {
-    const ctx = document.getElementById(canvasId).getContext('2d');
+    const el = document.getElementById(canvasId);
+    if (!el) return;
+    const ctx = el.getContext('2d');
     this.interestChart = new Chart(ctx, {
       type: 'radar',
       data: {
@@ -210,7 +218,9 @@ export class ChartManager {
   }
 
   initGeoChart(canvasId) {
-    const ctx = document.getElementById(canvasId).getContext('2d');
+    const el = document.getElementById(canvasId);
+    if (!el) return;
+    const ctx = el.getContext('2d');
     this.geoChart = new Chart(ctx, {
       type: 'bar',
       data: {

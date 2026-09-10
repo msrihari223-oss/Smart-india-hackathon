@@ -1,8 +1,43 @@
 /**
  * API Client for Social Media Analytics Framework
+ * Automatically resolves the correct backend host across same-origin, Live Server, custom dev ports, or file protocols.
  */
 
-const API_BASE = window.location.origin;
+export function resolveApiBase() {
+  if (typeof window === 'undefined') return 'http://127.0.0.1:8000';
+  const loc = window.location;
+  if (!loc || loc.protocol === 'file:' || loc.origin === 'null' || !loc.origin) {
+    return 'http://127.0.0.1:8000';
+  }
+  // When running directly from the FastAPI backend server (port 8000) or standard 80/443 in production
+  if (loc.port === '8000' || (!loc.port && (loc.protocol === 'http:' || loc.protocol === 'https:'))) {
+    return loc.origin;
+  }
+  // When running from a frontend dev server (e.g. Live Server on 5500, Vite on 5173, Next on 3000, etc.)
+  if (loc.hostname === 'localhost' || loc.hostname === '127.0.0.1') {
+    return `http://${loc.hostname}:8000`;
+  }
+  return loc.origin;
+}
+
+export function resolveWsUrl() {
+  if (typeof window === 'undefined') return 'ws://127.0.0.1:8000/ws/stream';
+  const loc = window.location;
+  if (!loc || loc.protocol === 'file:' || loc.origin === 'null') {
+    return 'ws://127.0.0.1:8000/ws/stream';
+  }
+  const wsProto = loc.protocol === 'https:' ? 'wss:' : 'ws:';
+  if (loc.port === '8000' || (!loc.port && (loc.protocol === 'http:' || loc.protocol === 'https:'))) {
+    return `${wsProto}//${loc.host}/ws/stream`;
+  }
+  if (loc.hostname === 'localhost' || loc.hostname === '127.0.0.1') {
+    return `ws://${loc.hostname}:8000/ws/stream`;
+  }
+  return `${wsProto}//${loc.host}/ws/stream`;
+}
+
+export const API_BASE = resolveApiBase();
+export const WS_URL = resolveWsUrl();
 
 export const ApiClient = {
   async getKPIs() {
@@ -58,14 +93,24 @@ export const ApiClient = {
   },
 
   async checkToxicity(payload) {
+    const body = typeof payload === 'string' ? { text: payload } : payload;
     const res = await fetch(`${API_BASE}/api/check-toxicity`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(body)
     });
     return await res.json();
   },
 
+  async uploadMedia(file) {
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await fetch(`${API_BASE}/api/media/upload`, {
+      method: 'POST',
+      body: formData
+    });
+    return await res.json();
+  },
 
   async controlStreamSpeed(speedSeconds) {
     const res = await fetch(`${API_BASE}/api/stream/control`, {
@@ -164,18 +209,5 @@ export const ApiClient = {
       body: JSON.stringify(payload)
     });
     return await res.json();
-  },
-
-  async controlStreamSpeed(speedSeconds = 0.8) {
-    try {
-      const res = await fetch(`${API_BASE}/api/stream/control`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ speed_seconds: speedSeconds })
-      });
-      return await res.json();
-    } catch (e) {
-      return { status: 'error', error: e.message };
-    }
   }
 };

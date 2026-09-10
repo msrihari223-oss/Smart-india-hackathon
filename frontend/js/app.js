@@ -2,7 +2,7 @@
  * Main Application Orchestrator for Social Media Analytics Framework
  */
 
-import { ApiClient } from './api.js';
+import { ApiClient, API_BASE, WS_URL } from './api.js';
 import { chartManager } from './charts.js';
 import { NetworkGraphManager } from './network_graph.js';
 
@@ -29,18 +29,35 @@ class App {
   }
 
   async init() {
-    this.setupTabs();
-    this.setupEventListeners();
-    this.initCharts();
-    this.initInfluencerRankings();
-    
-    // Initial Load
-    await this.checkDbHealth();
-    await this.loadInitialData();
-    await this.loadRealUsers();
-    await this.loadInfluencerRankings();
-    this.updateMyPostsCountBadge();
+    // 1. Instantly connect live WebSocket and load core data immediately
     this.connectWebSocket();
+    this.loadInitialData();
+    this.updateMyPostsCountBadge();
+
+    // 2. Setup UI components and charts safely
+    try {
+      this.setupTabs();
+      this.setupEventListeners();
+    } catch (e) {
+      console.warn('UI setup notice:', e);
+    }
+
+    try {
+      this.initCharts();
+    } catch (e) {
+      console.warn('Chart init notice:', e);
+    }
+
+    try {
+      this.initInfluencerRankings();
+    } catch (e) {
+      console.warn('Influencer rankings init notice:', e);
+    }
+    
+    // 3. Background async loads
+    this.checkDbHealth().catch(() => {});
+    this.loadRealUsers().catch(() => {});
+    this.loadInfluencerRankings().catch(() => {});
 
     // Periodic Database Health Monitoring
     setInterval(() => this.checkDbHealth(), 15000);
@@ -341,13 +358,7 @@ class App {
 
         // Upload to server for permanent static URL & database storage
         try {
-          const formData = new FormData();
-          formData.append('file', file);
-          const res = await fetch('/api/media/upload', {
-            method: 'POST',
-            body: formData
-          });
-          const data = await res.json();
+          const data = await ApiClient.uploadMedia(file);
           if (data.success && data.media_url) {
             if (mediaUrlInput) mediaUrlInput.value = data.media_url;
             if (data.media_type === 'video' && tabBtnVideo) tabBtnVideo.click();
@@ -747,32 +758,48 @@ class App {
   }
 
   async loadInitialData() {
-    try {
-      const [kpis, feed, timeline, demo, trends, network] = await Promise.all([
-        ApiClient.getKPIs(),
-        ApiClient.getFeed(30),
-        ApiClient.getTimeline(15),
-        ApiClient.getDemographics(),
-        ApiClient.getTrends(),
-        ApiClient.getNetwork()
-      ]);
+    // 1. Immediately fetch and render KPIs
+    ApiClient.getKPIs()
+      .then(kpis => { if (kpis) this.updateKPIs(kpis); })
+      .catch(e => console.warn('KPI load error:', e));
 
-      this.updateKPIs(kpis);
-      this.renderFeed(feed);
-      this.activeFeedPosts = feed;
-      
-      chartManager.updateTimelineChart(timeline);
-      chartManager.updateAgeDistribution(demo.age_brackets);
-      chartManager.updateInterestsRadar(demo.interests);
-      chartManager.updateGeoChart(demo.geographic_distribution);
-      
-      this.renderTrends(trends);
-      this.renderNetwork(network);
-      this.populateCascadeSeedSelect(network.kols);
+    // 2. Immediately fetch and render Feed
+    ApiClient.getFeed(30)
+      .then(feed => {
+        if (feed && feed.length > 0) {
+          this.activeFeedPosts = feed;
+          this.renderFeed(feed);
+        }
+      })
+      .catch(e => console.warn('Feed load error:', e));
 
-    } catch (e) {
-      console.error('Failed to load initial data:', e);
-    }
+    // 3. Concurrently fetch analytical charts & trends
+    ApiClient.getTimeline(15)
+      .then(timeline => chartManager.updateTimelineChart(timeline))
+      .catch(() => {});
+
+    ApiClient.getDemographics()
+      .then(demo => {
+        if (demo) {
+          chartManager.updateAgeDistribution(demo.age_brackets);
+          chartManager.updateInterestsRadar(demo.interests);
+          chartManager.updateGeoChart(demo.geographic_distribution);
+        }
+      })
+      .catch(() => {});
+
+    ApiClient.getTrends()
+      .then(trends => { if (trends) this.renderTrends(trends); })
+      .catch(() => {});
+
+    ApiClient.getNetwork()
+      .then(network => {
+        if (network) {
+          this.renderNetwork(network);
+          this.populateCascadeSeedSelect(network.kols);
+        }
+      })
+      .catch(() => {});
   }
 
   connectWebSocket() {
@@ -784,43 +811,74 @@ class App {
       clearInterval(this.wsPingInterval);
       this.wsPingInterval = null;
     }
+    if (this.wsWatchdogInterval) {
+      clearInterval(this.wsWatchdogInterval);
+      this.wsWatchdogInterval = null;
+    }
 
-    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${wsProtocol}//${window.location.host}/ws/stream`;
-    
+    const wsUrl = WS_URL || 'ws://127.0.0.1:8000/ws/stream';
+    this.lastWsMessageTime = Date.now();
+
     try {
       this.ws = new WebSocket(wsUrl);
     } catch (err) {
-      console.warn('WebSocket connection attempt failed, retrying in 2s...', err);
+      console.warn('WebSocket connection attempt failed, using fallback polling...', err);
+      this.startFallbackPolling();
       setTimeout(() => this.connectWebSocket(), 2000);
       return;
     }
 
     this.ws.onopen = () => {
+      this.stopFallbackPolling();
       const statusEl = document.getElementById('stream-connection-status');
       if (statusEl) {
         statusEl.innerText = 'Live Feed Connected';
         statusEl.style.color = '#38bdf8';
       }
-      this.reconnectDelay = 1000;
+      this.reconnectDelay = 600;
+      this.lastWsMessageTime = Date.now();
 
-      // Active Keepalive Heartbeat: Pings server every 10 seconds to keep connection permanently open
+      // Send immediate initial ping
+      try {
+        this.ws.send(JSON.stringify({ type: 'ping', time: Date.now() }));
+      } catch (e) {}
+
+      // 1. High-frequency keepalive heartbeat every 4 seconds
       this.wsPingInterval = setInterval(() => {
         if (this.ws && this.ws.readyState === WebSocket.OPEN) {
           try {
             this.ws.send(JSON.stringify({ type: 'ping', time: Date.now() }));
           } catch (e) {}
         }
-      }, 10000);
+      }, 4000);
+
+      // 2. Active Watchdog: Reconnect if no message received for > 7 seconds
+      this.wsWatchdogInterval = setInterval(() => {
+        if (Date.now() - this.lastWsMessageTime > 7000) {
+          console.warn('[WS Watchdog] Stream silence detected, actively refreshing connection...');
+          try {
+            if (this.ws) this.ws.close();
+          } catch (e) {}
+        }
+      }, 3500);
     };
 
     this.ws.onmessage = (event) => {
+      this.lastWsMessageTime = Date.now();
       if (this.isStreamPaused) return;
 
       try {
         const data = JSON.parse(event.data);
         if (data.type === 'pong') {
-          // Heartbeat acknowledged
+          return;
+        }
+        if (data.type === 'INIT_SNAPSHOT') {
+          if (data.kpis) this.updateKPIs(data.kpis);
+          if (data.trends) this.renderTrends(data.trends);
+          if (data.recent_posts && (!this.activeFeedPosts || this.activeFeedPosts.length === 0)) {
+            this.activeFeedPosts = data.recent_posts;
+            this.renderFeed(data.recent_posts);
+          }
           return;
         }
         if (data.type === 'LIVE_POST') {
@@ -831,8 +889,9 @@ class App {
       }
     };
 
-    this.ws.onerror = () => {
-      // Handled via onclose
+    this.ws.onerror = (err) => {
+      console.warn('WebSocket stream notice:', err);
+      this.startFallbackPolling();
     };
 
     this.ws.onclose = () => {
@@ -840,17 +899,22 @@ class App {
         clearInterval(this.wsPingInterval);
         this.wsPingInterval = null;
       }
+      if (this.wsWatchdogInterval) {
+        clearInterval(this.wsWatchdogInterval);
+        this.wsWatchdogInterval = null;
+      }
       const statusEl = document.getElementById('stream-connection-status');
       if (statusEl) {
         statusEl.innerText = 'Reconnecting...';
         statusEl.style.color = '#f59e0b';
       }
-      const delay = this.reconnectDelay || 2000;
-      this.reconnectDelay = Math.min(delay * 1.5, 10000);
+      this.startFallbackPolling();
+      const delay = this.reconnectDelay || 800;
+      this.reconnectDelay = Math.min(delay * 1.3, 4000);
       setTimeout(() => this.connectWebSocket(), delay);
     };
 
-    // Auto-reconnect when tab gains focus or network comes online
+    // Auto-reconnect when tab gains focus, window comes online or user interacts
     if (!this._hasBoundWsEvents) {
       this._hasBoundWsEvents = true;
       document.addEventListener('visibilitychange', () => {
@@ -863,6 +927,36 @@ class App {
       window.addEventListener('online', () => {
         this.connectWebSocket();
       });
+      window.addEventListener('focus', () => {
+        if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+          this.connectWebSocket();
+        }
+      });
+    }
+  }
+
+  startFallbackPolling() {
+    if (this._fallbackPollInterval) return;
+    this._fallbackPollInterval = setInterval(async () => {
+      try {
+        const [kpis, feed, trends] = await Promise.all([
+          ApiClient.getKPIs().catch(() => null),
+          ApiClient.getFeed(15, this.currentPlatformFilter, this.currentEmotionFilter, this.searchQuery).catch(() => null),
+          ApiClient.getTrends().catch(() => null)
+        ]);
+        if (kpis) this.updateKPIs(kpis);
+        if (trends) this.renderTrends(trends);
+        if (feed && feed.length > 0) {
+          this.renderFeed(feed);
+        }
+      } catch (e) {}
+    }, 4000);
+  }
+
+  stopFallbackPolling() {
+    if (this._fallbackPollInterval) {
+      clearInterval(this._fallbackPollInterval);
+      this._fallbackPollInterval = null;
     }
   }
 
@@ -1501,23 +1595,14 @@ class App {
         : 'Initial narrative seed broadcast';
 
       el.innerHTML = `
-  renderKpis(kpis) {
-    if (!kpis) return;
-    const totalEl = document.getElementById('kpi-total-posts');
-    const sentEl = document.getElementById('kpi-sentiment-index');
-    const spreadEl = document.getElementById('kpi-spread-velocity');
-    const alertEl = document.getElementById('kpi-active-alerts');
-
-    if (totalEl) totalEl.innerText = (kpis.total_posts || 0).toLocaleString();
-    if (sentEl) {
-      sentEl.innerText = `${(kpis.sentiment_index || 0.0).toFixed(2)}`;
-      sentEl.style.color = (kpis.sentiment_index || 0) >= 0 ? 'var(--neon-cyan)' : 'var(--neon-rose)';
-    }
-    if (spreadEl) spreadEl.innerText = `${kpis.spread_velocity || 1.0}x`;
-    if (alertEl) {
-      alertEl.innerText = kpis.active_alerts || 0;
-      alertEl.style.color = (kpis.active_alerts || 0) > 0 ? 'var(--neon-rose)' : 'var(--neon-emerald)';
-    }
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
+          <strong style="color: #fff; font-size: 0.8rem;"><i class="fas fa-layer-group" style="color: var(--neon-cyan); margin-right: 4px;"></i>Step ${idx + 1} (${s.activated_count || propagations.length || 1} Nodes Activated)</strong>
+          <span style="font-size: 0.7rem; color: var(--neon-cyan); background: rgba(0, 240, 255, 0.1); padding: 2px 6px; border-radius: 4px;">Cumulative Reach: ${reached}</span>
+        </div>
+        <div style="font-size: 0.75rem; color: var(--text-muted); line-height: 1.4;">${actNodes}</div>
+      `;
+      log.appendChild(el);
+    });
   }
 
   updateLiveToxicityIndicator(tox) {
@@ -2119,8 +2204,17 @@ class App {
   }
 }
 
-// Initialize on DOM Ready
-document.addEventListener('DOMContentLoaded', () => {
+// Robust Initialization (handles DOM loading, interactive, and complete states)
+function initMainApp() {
+  if (window.__app_initialized) return;
+  window.__app_initialized = true;
   const app = new App();
+  window.app = app;
   app.init();
-});
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initMainApp);
+} else {
+  initMainApp();
+}

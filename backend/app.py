@@ -49,9 +49,10 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORS Setup
+# CORS Setup with origin regex and wildcard support
 app.add_middleware(
     CORSMiddleware,
+    allow_origin_regex=r"https?://.*",
     allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
@@ -97,9 +98,9 @@ async def get_db_health():
 
 @app.post("/api/db/reconnect")
 async def reconnect_db(db_url: Optional[str] = Query(None)):
-    """Re-attempts connection to PostgreSQL host or updates connection URL dynamically"""
-    success = postgres_repo.reconnect(db_url)
-    return {"success": success, "health": postgres_repo.check_health()}
+    """Re-attempts connection to PostgreSQL host or updates connection URL dynamically in background"""
+    asyncio.create_task(asyncio.to_thread(postgres_repo.reconnect, db_url))
+    return {"success": True, "message": "Reconnection initiated in background.", "health": postgres_repo.check_health()}
 
 @app.get("/api/kpis")
 async def get_kpis():
@@ -622,11 +623,13 @@ async def toggle_post_like(post_id: str, req: ToggleLikeRequest):
 
 
 @app.post("/api/posts/{post_id}/repost")
-async def repost_post(post_id: str, req: RepostRequest):
+async def repost_post(post_id: str, req: Optional[RepostRequest] = None):
     """
     Creates a Repost / Retweet of an existing post, increments original post's share count,
     and broadcasts the reposted post to the live ingestion stream.
     """
+    if req is None:
+        req = RepostRequest()
     import uuid
     import time
     from datetime import datetime
@@ -744,16 +747,20 @@ async def get_real_user_stats():
 
 @app.post("/api/real-users/collect-now")
 async def trigger_real_collection():
-    """Immediately triggers a live multi-threaded crawl across Telegram, YouTube, Reddit, X, Instagram"""
-    real_user_fetcher.refresh_real_stream_buffer()
-    collected = []
-    for _ in range(15):
-        p = real_user_fetcher.get_next_real_post()
-        if p:
-            collected.append(p)
+    """Immediately triggers a live multi-threaded crawl across Telegram, YouTube, Reddit, X, Instagram in background"""
+    async def _bg_crawl():
+        def _do_collect():
+            real_user_fetcher.refresh_real_stream_buffer()
+            for _ in range(15):
+                p = real_user_fetcher.get_next_real_post()
+                if p:
+                    timeline_db.insert(p)
+        await asyncio.to_thread(_do_collect)
+
+    asyncio.create_task(_bg_crawl())
     return {
         "status": "success",
-        "collected_posts_count": len(collected),
+        "message": "Live multi-threaded public stream collection initiated in background.",
         "total_indexed_real_users": len(real_user_manager.users),
         "stats": real_user_manager.get_user_stats()
     }
@@ -935,6 +942,18 @@ async def get_moderation_email_logs(limit: int = Query(50, ge=1, le=200)):
 
 # ----------------- Static Frontend Hosting -----------------
 if os.path.exists(FRONTEND_DIR):
+    # Mount direct asset directories so paths like /css/style.css, /js/app.js, and /uploads/... work
+    css_dir = os.path.join(FRONTEND_DIR, "css")
+    js_dir = os.path.join(FRONTEND_DIR, "js")
+    uploads_dir = os.path.join(FRONTEND_DIR, "uploads")
+    
+    if os.path.exists(css_dir):
+        app.mount("/css", StaticFiles(directory=css_dir), name="css")
+    if os.path.exists(js_dir):
+        app.mount("/js", StaticFiles(directory=js_dir), name="js")
+    if os.path.exists(uploads_dir):
+        app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
+
     app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
 
     @app.get("/")
@@ -945,3 +964,7 @@ if os.path.exists(FRONTEND_DIR):
     @app.get("/login.html")
     async def serve_login():
         return FileResponse(os.path.join(FRONTEND_DIR, "login.html"))
+
+    @app.get("/index.html")
+    async def serve_index_direct():
+        return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))
